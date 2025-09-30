@@ -81,7 +81,8 @@
                 <p class="text-sm text-gray-400 mt-2">Please allow camera access to use this app. If you denied it, you may need to reset permissions in your browser settings.</p>
             </div>
             <button id="fullscreen-btn" class="absolute top-2 right-2 bg-gray-900 bg-opacity-50 p-2 rounded-full z-10 text-white hover:bg-opacity-75 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 L9 9M20.25 20.25v-4.5m0 4.5h-4.5m4.5 0L15 15m-6 0L3.75 20.25m16.5-16.5L15 9" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-expand h-6 w-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 20.25v-4.5m0 4.5h-4.5m4.5 0L15 15m-6 0L3.75 20.25m16.5-16.5L15 9" />
                 </svg>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-compress h-6 w-6 hidden">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
@@ -181,11 +182,13 @@
 
         <!-- Guide Panel -->
         <div id="guide-panel" class="absolute inset-0 bg-gray-900 p-4 z-20 flex-col items-center justify-center text-center hidden">
-            <h2 class="text-lg font-bold mb-4">Panorama Guide</h2>
-            <p class="text-sm mb-2">This is the **first** shot in your sequence.</p>
-            <p class="text-sm text-gray-400 mb-4">For your next shot, pan right until the left edge of your camera view matches this guide image.</p>
-            <canvas id="guide-canvas" class="border-2 border-blue-500 rounded-lg max-w-full"></canvas>
-            <button id="reset-button" class="mt-6 w-full max-w-xs bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+            <h2 class="text-lg font-bold mb-2">Panorama Composition Guide</h2>
+            <p class="text-sm text-gray-400 mb-4">This preview shows your first shot and the full area your panorama will cover.</p>
+            <div class="w-full overflow-x-auto p-2 bg-gray-950 rounded-lg">
+                <canvas id="guide-canvas" class="rounded-lg"></canvas>
+            </div>
+            <p class="text-sm mt-4 text-gray-400">Pan right to capture the remaining panels, using the dashed lines as guides.</p>
+            <button id="reset-button" class="mt-4 w-full max-w-xs bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
                 Plan New Panorama
             </button>
         </div>
@@ -441,24 +444,54 @@
                 controlsPanel.classList.add('hidden');
                 guidePanel.style.display = 'flex';
 
+                // 1. Capture the current frame
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = video.videoWidth;
                 tempCanvas.height = video.videoHeight;
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
 
+                // 2. Get panorama settings
                 const overlapPercent = parseInt(overlapSlider.value) / 100;
-                const overlapPixels = tempCanvas.width * overlapPercent;
+                const panelCount = parseInt(panelCountSlider.value);
                 
-                const sx = tempCanvas.width - overlapPixels;
-                const sy = 0;
-                const sWidth = overlapPixels;
-                const sHeight = tempCanvas.height;
+                // 3. Calculate dimensions for the guide
+                const imageWidth = tempCanvas.width;
+                const imageHeight = tempCanvas.height;
+                const overlapPixels = imageWidth * overlapPercent;
+                const panelAdvanceWidth = imageWidth - overlapPixels; // How much to pan for each new shot
 
-                guideCanvas.width = sWidth;
-                guideCanvas.height = sHeight;
+                const totalGuideWidth = imageWidth + (panelAdvanceWidth * (panelCount - 1));
 
-                guideCtx.drawImage(tempCanvas, sx, sy, sWidth, sHeight, 0, 0, guideCanvas.width, guideCanvas.height);
+                // 4. Set final guide canvas dimensions
+                guideCanvas.width = totalGuideWidth;
+                guideCanvas.height = imageHeight;
+                
+                // 5. Draw the captured image on the left
+                guideCtx.drawImage(tempCanvas, 0, 0);
+
+                // 6. Draw a semi-transparent overlay for the un-captured area
+                guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                guideCtx.fillRect(imageWidth, 0, totalGuideWidth - imageWidth, imageHeight);
+                
+                // 7. Draw the overall panorama frame
+                guideCtx.strokeStyle = '#3b82f6'; // blue-500
+                guideCtx.lineWidth = 8;
+                guideCtx.strokeRect(0, 0, totalGuideWidth, imageHeight);
+
+                // 8. Draw panel divider lines
+                guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                guideCtx.lineWidth = 3;
+                guideCtx.setLineDash([20, 15]);
+
+                for (let i = 1; i < panelCount; i++) {
+                    const lineX = i * panelAdvanceWidth;
+                    guideCtx.beginPath();
+                    guideCtx.moveTo(lineX, 0);
+                    guideCtx.lineTo(lineX, imageHeight);
+                    guideCtx.stroke();
+                }
+                guideCtx.setLineDash([]);
             }
 
             // --- Event Listeners ---
