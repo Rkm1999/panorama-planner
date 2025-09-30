@@ -37,7 +37,7 @@
             border-radius: 9999px;
         }
         .control-panel-grid {
-            grid-template-columns: 1fr 2fr;
+            grid-template-columns: auto 1fr;
         }
         
         /* Fullscreen styles */
@@ -105,7 +105,10 @@
 
             <!-- Focal Length -->
             <div class="grid control-panel-grid items-center gap-2">
-                <label for="focal-length" class="text-sm font-medium">Focal Length</label>
+                <div class="flex items-center space-x-2">
+                    <label for="focal-length" class="text-sm font-medium">Focal Length</label>
+                    <button id="detect-fl-btn" class="bg-gray-600 hover:bg-gray-500 text-xs px-2 py-1 rounded-md">Detect</button>
+                </div>
                 <div class="flex items-center space-x-2">
                     <input type="range" id="focal-length" min="12" max="200" value="50" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
                     <span id="focal-length-value" class="text-sm font-mono w-12 text-center">50mm</span>
@@ -181,6 +184,7 @@
             const sensorSelect = document.getElementById('sensor-size');
             const focalLengthSlider = document.getElementById('focal-length');
             const focalLengthValue = document.getElementById('focal-length-value');
+            const detectFLBtn = document.getElementById('detect-fl-btn');
             const overlapSlider = document.getElementById('overlap');
             const overlapValue = document.getElementById('overlap-value');
             const panelCountSlider = document.getElementById('panel-count');
@@ -266,6 +270,46 @@
             // --- Calculation Engine ---
             function calculateSingleFOV(sensorDimension, focalLength) {
                 return 2 * Math.atan(sensorDimension / (2 * focalLength)) * (180 / Math.PI);
+            }
+            
+            function detectFocalLength() {
+                if (!state.stream) return;
+                const track = state.stream.getVideoTracks()[0];
+                if (typeof track.getSettings !== 'function') {
+                    showTemporaryMessage(detectFLBtn, 'Unsupported');
+                    return;
+                }
+                
+                const settings = track.getSettings();
+                if (settings.focalLength) {
+                    const nativeFocalLength = settings.focalLength;
+                    const selectedSensorKey = sensorSelect.value;
+                    const selectedSensor = SENSOR_SIZES[selectedSensorKey];
+                    const fullFrameSensor = SENSOR_SIZES.fullframe;
+
+                    const selectedSensorDiagonal = Math.sqrt(selectedSensor.width**2 + selectedSensor.height**2);
+                    const fullFrameDiagonal = Math.sqrt(fullFrameSensor.width**2 + fullFrameSensor.height**2);
+                    
+                    const cropFactor = fullFrameDiagonal / selectedSensorDiagonal;
+                    const equivalentFocalLength = Math.round(nativeFocalLength * cropFactor);
+                    
+                    focalLengthSlider.value = equivalentFocalLength;
+                    // Manually trigger the input event to update the UI and recalculate the overlay
+                    focalLengthSlider.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+                    showTemporaryMessage(detectFLBtn, `Set to ${equivalentFocalLength}mm`);
+
+                } else {
+                    showTemporaryMessage(detectFLBtn, 'Not Found');
+                }
+            }
+            
+            function showTemporaryMessage(element, message) {
+                const originalText = element.textContent;
+                element.textContent = message;
+                setTimeout(() => {
+                    element.textContent = originalText;
+                }, 2000);
             }
 
             function updateCalculationsAndDraw() {
@@ -368,9 +412,11 @@
             // --- Event Listeners ---
             [focalLengthSlider, overlapSlider, panelCountSlider, sensorSelect].forEach(el => {
                 el.addEventListener('input', () => {
-                    // This is just to trigger the animation frame, which reads the values
+                    // Just trigger the next animation frame which reads the values
                 });
             });
+
+            detectFLBtn.addEventListener('click', detectFocalLength);
 
             landscapeBtn.addEventListener('click', () => {
                 state.orientation = 'landscape';
