@@ -50,12 +50,16 @@
             height: 100%;
         }
 
-        body.fullscreen-active .icon-expand {
+        body.fullscreen-active #fullscreen-btn .icon-expand {
             display: none;
         }
 
-        body.fullscreen-active .icon-compress {
+        body.fullscreen-active #fullscreen-btn .icon-compress {
             display: block;
+        }
+        
+        body.fullscreen-active #fullscreen-capture-btn {
+            display: flex;
         }
 
     </style>
@@ -87,6 +91,10 @@
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-compress h-6 w-6 hidden">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
                 </svg>
+            </button>
+            <!-- Fullscreen Capture Button -->
+            <button id="fullscreen-capture-btn" class="absolute bottom-6 bg-white w-16 h-16 rounded-full z-30 hidden items-center justify-center ring-4 ring-black ring-opacity-20">
+                <div class="w-14 h-14 bg-white rounded-full border-4 border-gray-900"></div>
             </button>
         </div>
 
@@ -173,11 +181,11 @@
                 <div class="flex justify-center items-baseline space-x-6 mt-1">
                     <div>
                         <span id="pano-fov-value" class="text-2xl font-bold text-blue-400">105.4°</span>
-                        <span class="block text-xs text-gray-500">Horizontal</span>
+                        <span id="pano-fov-label" class="block text-xs text-gray-500">Horizontal</span>
                     </div>
                     <div>
                         <span id="pano-fov-vertical-value" class="text-2xl font-bold text-blue-400">27.0°</span>
-                        <span class="block text-xs text-gray-500">Vertical</span>
+                        <span id="pano-fov-vertical-label" class="block text-xs text-gray-500">Vertical</span>
                     </div>
                 </div>
             </div>
@@ -193,10 +201,10 @@
         <div id="guide-panel" class="absolute inset-0 bg-gray-900 p-4 z-20 flex-col items-center justify-center text-center hidden">
             <h2 class="text-lg font-bold mb-2">Panorama Composition Guide</h2>
             <p class="text-sm text-gray-400 mb-4">This preview shows your first shot and the full area your panorama will cover.</p>
-            <div class="w-full overflow-x-auto p-2 bg-gray-950 rounded-lg flex justify-center items-center">
+            <div id="guide-container" class="w-full overflow-auto p-2 bg-gray-950 rounded-lg flex justify-center items-center">
                 <canvas id="guide-canvas" class="rounded-lg"></canvas>
             </div>
-            <p class="text-sm mt-4 text-gray-400">Pan right to capture the remaining panels, using the dashed lines as guides.</p>
+            <p id="guide-text" class="text-sm mt-4 text-gray-400">Pan right to capture the remaining panels, using the dashed lines as guides.</p>
             <button id="reset-button" class="mt-4 w-full max-w-xs bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
                 Plan New Panorama
             </button>
@@ -213,8 +221,7 @@
             const overlayCtx = overlayCanvas.getContext('2d');
             const permissionMessage = document.getElementById('permission-message');
             const fullscreenBtn = document.getElementById('fullscreen-btn');
-            const iconExpand = fullscreenBtn.querySelector('.icon-expand');
-            const iconCompress = fullscreenBtn.querySelector('.icon-compress');
+            const fullscreenCaptureBtn = document.getElementById('fullscreen-capture-btn');
 
             const controlsPanel = document.getElementById('controls-panel');
             const cameraSelect = document.getElementById('camera-select');
@@ -230,12 +237,16 @@
             const landscapeBtn = document.getElementById('orientation-landscape');
             const portraitBtn = document.getElementById('orientation-portrait');
             const panoFovValue = document.getElementById('pano-fov-value');
+            const panoFovLabel = document.getElementById('pano-fov-label');
             const panoFovVerticalValue = document.getElementById('pano-fov-vertical-value');
+            const panoFovVerticalLabel = document.getElementById('pano-fov-vertical-label');
             
             const captureButton = document.getElementById('capture-button');
             const guidePanel = document.getElementById('guide-panel');
             const guideCanvas = document.getElementById('guide-canvas');
             const guideCtx = guideCanvas.getContext('2d');
+            const guideContainer = document.getElementById('guide-container');
+            const guideText = document.getElementById('guide-text');
             const resetButton = document.getElementById('reset-button');
             
             // --- State and Constants ---
@@ -249,7 +260,7 @@
             let state = {
                 orientation: 'landscape', // 'landscape' or 'portrait'
                 stream: null,
-                lastOnScreenFov: 75,
+                lastOnScreenVerticalFov: 45, // Fallback
                 lastSingleFov: 0,
                 lastSingleFovVertical: 0,
             };
@@ -264,7 +275,6 @@
                     videoDevices.forEach((device, index) => {
                         const option = document.createElement('option');
                         option.value = device.deviceId;
-                        // Try to create a user-friendly label
                         option.text = device.label || `Camera ${index + 1}`;
                         cameraSelect.appendChild(option);
                     });
@@ -278,7 +288,6 @@
             }
             
             async function startCamera(deviceId) {
-                // Stop any existing stream
                 if (state.stream) {
                     state.stream.getTracks().forEach(track => track.stop());
                 }
@@ -302,7 +311,6 @@
                         video.play();
                         resizeCanvas();
                         updateDetectedFocalLengthInfo();
-                        // Restart animation loop if it was stopped
                         requestAnimationFrame(updateCalculationsAndDraw);
                     };
                 } catch (err) {
@@ -340,6 +348,7 @@
 
             // --- Calculation Engine ---
             function calculateSingleFOV(sensorDimension, focalLength) {
+                if (focalLength === 0) return 180;
                 return 2 * Math.atan(sensorDimension / (2 * focalLength)) * (180 / Math.PI);
             }
             
@@ -357,7 +366,6 @@
                 const settings = track.getSettings();
                 if (settings.focalLength) {
                     const nativeFocalLength = settings.focalLength;
-                    // For phone camera focal length, we'll calculate its 35mm equivalent based on the "Phone" sensor size preset
                     const phoneSensor = SENSOR_SIZES.phone;
                     const fullFrameSensor = SENSOR_SIZES.fullframe;
 
@@ -374,57 +382,57 @@
             }
 
             function updateCalculationsAndDraw() {
-                // Read values from controls for the PLAN
                 const sensor = SENSOR_SIZES[sensorSelect.value];
                 const focalLength = parseInt(focalLengthSlider.value);
                 const overlap = parseInt(overlapSlider.value) / 100;
                 const panelCount = parseInt(panelCountSlider.value);
 
-                // Update UI text values
                 focalLengthValue.textContent = `${focalLength}mm`;
                 overlapValue.textContent = `${overlap * 100}%`;
                 panelCountValue.textContent = panelCount;
                 
-                // Perform calculations for the PLAN
-                const horizontalSensorDim = state.orientation === 'landscape' ? sensor.width : sensor.height;
-                const verticalSensorDim = state.orientation === 'landscape' ? sensor.height : sensor.width;
+                const horizontalSensorDim = sensor.width;
+                const verticalSensorDim = sensor.height;
 
-                const singleFov = calculateSingleFOV(horizontalSensorDim, focalLength);
+                const singleFovHorizontal = calculateSingleFOV(horizontalSensorDim, focalLength);
                 const singleFovVertical = calculateSingleFOV(verticalSensorDim, focalLength);
                 
-                state.lastSingleFov = singleFov; // Store for capture guide
-                state.lastSingleFovVertical = singleFovVertical;
+                let longEdgeFov, shortEdgeFov;
+                if (state.orientation === 'landscape') {
+                    longEdgeFov = singleFovHorizontal;
+                    shortEdgeFov = singleFovVertical;
+                    panoFovLabel.textContent = 'Horizontal';
+                    panoFovVerticalLabel.textContent = 'Vertical';
+                } else {
+                    longEdgeFov = singleFovVertical;
+                    shortEdgeFov = singleFovHorizontal;
+                    panoFovLabel.textContent = 'Vertical';
+                    panoFovVerticalLabel.textContent = 'Horizontal';
+                }
 
-                let panoFov = (singleFov * panelCount) - (singleFov * overlap * (panelCount - 1));
+                state.lastSingleFov = longEdgeFov;
+                state.lastSingleFovVertical = shortEdgeFov;
+
+                let panoFov = (longEdgeFov * panelCount) - (longEdgeFov * overlap * (panelCount - 1));
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
-                panoFovVerticalValue.textContent = `${singleFovVertical.toFixed(1)}°`;
+                panoFovVerticalValue.textContent = `${shortEdgeFov.toFixed(1)}°`;
                 
-                // --- Now calculate the FOV for the LIVE PREVIEW to draw the overlay correctly ---
                 const videoTrack = state.stream ? state.stream.getVideoTracks()[0] : null;
                 const videoSettings = videoTrack ? videoTrack.getSettings() : {};
                 const manualPhoneFL = phoneFLSelect.value;
-
-                let onScreenFov = 75; // Default fallback FOV
+                let onScreenVerticalFov = 45; // Default fallback FOV
 
                 if (manualPhoneFL !== 'auto') {
-                    // User has selected a manual override (value is 35mm equivalent)
                     const fullFrameSensor = SENSOR_SIZES.fullframe;
-                    const videoIsPortrait = video.videoHeight > video.videoWidth;
-                    const previewSensorDimForCalc = videoIsPortrait ? fullFrameSensor.height : fullFrameSensor.width;
-                    onScreenFov = calculateSingleFOV(previewSensorDimForCalc, parseInt(manualPhoneFL));
-
+                    onScreenVerticalFov = calculateSingleFOV(fullFrameSensor.height, parseInt(manualPhoneFL));
                 } else if (videoSettings.focalLength) {
-                    // Auto-detect is selected and focal length is available from the API
                     const phoneSensor = SENSOR_SIZES.phone;
-                    const videoIsPortrait = video.videoHeight > video.videoWidth;
-                    const previewSensorDim = videoIsPortrait ? phoneSensor.height : phoneSensor.width;
-                    onScreenFov = calculateSingleFOV(previewSensorDim, videoSettings.focalLength);
+                    onScreenVerticalFov = calculateSingleFOV(phoneSensor.height, videoSettings.focalLength);
                 }
-                // Else, it will use the default fallback FOV of 75 degrees.
-                state.lastOnScreenFov = onScreenFov; // Store for capture guide
+                
+                state.lastOnScreenVerticalFov = onScreenVerticalFov;
 
-                // Draw the overlay
-                drawOverlay(onScreenFov, panoFov, singleFovVertical, panelCount, overlap);
+                drawOverlay(onScreenVerticalFov, panoFov, shortEdgeFov, panelCount, overlap);
                 
                 if (state.stream) {
                    requestAnimationFrame(updateCalculationsAndDraw);
@@ -432,15 +440,14 @@
             }
             
             // --- Drawing Logic ---
-            function drawOverlay(phoneFov, panoFov, panoFovVertical, panelCount, overlap) {
+            function drawOverlay(phoneVerticalFov, panoTotalLongFov, panoShortFov, panelCount, overlap) {
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
                 
-                const pixelsPerDegree = overlayCanvas.width / phoneFov;
-                const panoWidth = panoFov * pixelsPerDegree;
-                const panoHeight = panoFovVertical * pixelsPerDegree;
-                const panelWidthDegrees = (panoFov + (panoFovVertical * overlap * (panelCount - 1))) / panelCount; // This is an approximation
-                const panelAdvanceWidth = panelWidthDegrees * (1 - overlap) * pixelsPerDegree;
-
+                const pixelsPerDegree = overlayCanvas.height / phoneVerticalFov;
+                
+                const panoWidth = panoShortFov * pixelsPerDegree;
+                const panoHeight = panoTotalLongFov * pixelsPerDegree;
+                
                 const startX = (overlayCanvas.width - panoWidth) / 2;
                 const startY = (overlayCanvas.height - panoHeight) / 2;
                 
@@ -449,17 +456,23 @@
                 overlayCtx.lineWidth = 6;
                 overlayCtx.fillRect(startX, startY, panoWidth, panoHeight);
                 overlayCtx.strokeRect(startX, startY, panoWidth, panoHeight);
-                
+
+                // **FIX:** Draw divider lines inside the main overlay
                 overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
                 overlayCtx.lineWidth = 2;
                 overlayCtx.setLineDash([15, 15]);
 
+                const singlePanelLongFov = state.lastSingleFov;
+                const panelAdvancePixels = (singlePanelLongFov * (1 - overlap)) * pixelsPerDegree;
+                
+                // The overlay is always portrait, so the long edge of the panorama is always its height.
+                // We draw horizontal lines to divide the height into panels.
                 for (let i = 1; i < panelCount; i++) {
-                    const lineX = startX + (i * panelAdvanceWidth);
-                     if (lineX > startX && lineX < startX + panoWidth) {
+                    const lineY = startY + (i * panelAdvancePixels);
+                     if (lineY > startY && lineY < startY + panoHeight) {
                         overlayCtx.beginPath();
-                        overlayCtx.moveTo(lineX, startY);
-                        overlayCtx.lineTo(lineX, startY + panoHeight);
+                        overlayCtx.moveTo(startX, lineY);
+                        overlayCtx.lineTo(startX + panoWidth, lineY);
                         overlayCtx.stroke();
                     }
                 }
@@ -468,72 +481,94 @@
 
             // --- Capture Logic ---
             function captureGuide() {
+                if (bodyContainer.classList.contains('fullscreen-active')) {
+                    bodyContainer.classList.remove('fullscreen-active');
+                }
                 controlsPanel.classList.add('hidden');
                 guidePanel.style.display = 'flex';
 
-                // 1. Capture the current full video frame
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = video.videoWidth;
                 tempCanvas.height = video.videoHeight;
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
 
-                // 2. Get panorama settings
                 const overlapPercent = parseInt(overlapSlider.value) / 100;
                 const panelCount = parseInt(panelCountSlider.value);
-
-                // 3. Calculate dimensions based on FOV for accurate scaling
-                const pixelsPerDegree = tempCanvas.width / state.lastOnScreenFov;
-                const plannedPanelWidth = state.lastSingleFov * pixelsPerDegree;
-                const plannedPanelHeight = state.lastSingleFovVertical * pixelsPerDegree;
-
-                const panelAdvanceWidth = plannedPanelWidth * (1 - overlapPercent);
-                const totalGuideWidth = plannedPanelWidth + (panelAdvanceWidth * (panelCount - 1));
-
-                // 4. Set final guide canvas dimensions
-                guideCanvas.width = totalGuideWidth;
-                guideCanvas.height = plannedPanelHeight;
                 
-                // 5. Draw the entire captured video frame into the first panel's area.
-                // This maintains the visual context, even if stretched, within a correctly-proportioned frame.
-                guideCtx.drawImage(
-                    tempCanvas,       // source canvas
-                    0, 0,             // destination x, y
-                    plannedPanelWidth, plannedPanelHeight  // destination width, height
-                );
-
-                // 6. Draw a semi-transparent overlay for the un-captured area
-                guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                guideCtx.fillRect(plannedPanelWidth, 0, totalGuideWidth - plannedPanelWidth, plannedPanelHeight);
+                const pixelsPerDegree = tempCanvas.height / state.lastOnScreenVerticalFov;
                 
-                // 7. Draw the overall panorama frame
-                guideCtx.strokeStyle = '#3b82f6'; // blue-500
-                guideCtx.lineWidth = 8;
-                guideCtx.strokeRect(0, 0, totalGuideWidth, plannedPanelHeight);
+                const longEdgePixels = state.lastSingleFov * pixelsPerDegree;
+                const shortEdgePixels = state.lastSingleFovVertical * pixelsPerDegree;
 
-                // 8. Draw panel divider lines
-                guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                guideCtx.lineWidth = 3;
-                guideCtx.setLineDash([20, 15]);
+                const cropSourceWidth = state.lastSingleFovVertical * pixelsPerDegree;
+                const cropSourceHeight = state.lastSingleFov * pixelsPerDegree;
+                const cropSourceX = (tempCanvas.width - cropSourceWidth) / 2;
+                const cropSourceY = (tempCanvas.height - cropSourceHeight) / 2;
+                
 
-                for (let i = 1; i < panelCount; i++) {
-                    const lineX = i * panelAdvanceWidth;
-                    guideCtx.beginPath();
-                    guideCtx.moveTo(lineX, 0);
-                    guideCtx.lineTo(lineX, plannedPanelHeight);
-                    guideCtx.stroke();
+                if (state.orientation === 'landscape') {
+                    const panelAdvanceWidth = longEdgePixels * (1 - overlapPercent);
+                    const totalGuideWidth = longEdgePixels + (panelAdvanceWidth * (panelCount - 1));
+                    guideCanvas.width = totalGuideWidth;
+                    guideCanvas.height = shortEdgePixels;
+                    guideContainer.style.overflowX = 'auto';
+                    guideContainer.style.overflowY = 'hidden';
+                    guideText.textContent = "Pan right to capture the remaining panels, using the dashed lines as guides.";
+                    
+                    guideCtx.drawImage(tempCanvas, cropSourceX, cropSourceY, cropSourceWidth, cropSourceHeight, 0, 0, longEdgePixels, shortEdgePixels);
+
+                    guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    guideCtx.fillRect(longEdgePixels, 0, totalGuideWidth - longEdgePixels, shortEdgePixels);
+                    guideCtx.strokeStyle = '#3b82f6';
+                    guideCtx.lineWidth = 8;
+                    guideCtx.strokeRect(0, 0, totalGuideWidth, shortEdgePixels);
+                    guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    guideCtx.lineWidth = 3;
+                    guideCtx.setLineDash([20, 15]);
+                    for (let i = 1; i < panelCount; i++) {
+                        const lineX = i * panelAdvanceWidth;
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(lineX, 0);
+                        guideCtx.lineTo(lineX, shortEdgePixels);
+                        guideCtx.stroke();
+                    }
+                } else { // Portrait
+                    const panelAdvanceHeight = longEdgePixels * (1 - overlapPercent);
+                    const totalGuideHeight = longEdgePixels + (panelAdvanceHeight * (panelCount - 1));
+                    guideCanvas.width = shortEdgePixels;
+                    guideCanvas.height = totalGuideHeight;
+                    guideContainer.style.overflowY = 'auto';
+                    guideContainer.style.overflowX = 'hidden';
+                    guideText.textContent = "Pan up to capture the remaining panels, using the dashed lines as guides.";
+
+                    guideCtx.drawImage(tempCanvas, cropSourceX, cropSourceY, cropSourceWidth, cropSourceHeight, 0, 0, shortEdgePixels, longEdgePixels);
+
+                    guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    guideCtx.fillRect(0, longEdgePixels, shortEdgePixels, totalGuideHeight - longEdgePixels);
+                    guideCtx.strokeStyle = '#3b82f6';
+                    guideCtx.lineWidth = 8;
+                    guideCtx.strokeRect(0, 0, shortEdgePixels, totalGuideHeight);
+                    guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    guideCtx.lineWidth = 3;
+                    guideCtx.setLineDash([20, 15]);
+                    for (let i = 1; i < panelCount; i++) {
+                        const lineY = i * panelAdvanceHeight;
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(0, lineY);
+                        guideCtx.lineTo(shortEdgePixels, lineY);
+                        guideCtx.stroke();
+                    }
                 }
                 guideCtx.setLineDash([]);
             }
 
             // --- Event Listeners ---
             [focalLengthSlider, overlapSlider, panelCountSlider, sensorSelect, phoneFLSelect].forEach(el => {
-                el.addEventListener('input', () => { /* Trigger animation frame */ });
+                el.addEventListener('input', () => {});
             });
 
-            cameraSelect.addEventListener('change', (e) => {
-                startCamera(e.target.value);
-            });
+            cameraSelect.addEventListener('change', (e) => startCamera(e.target.value));
 
             landscapeBtn.addEventListener('click', () => {
                 state.orientation = 'landscape';
@@ -553,12 +588,11 @@
 
             fullscreenBtn.addEventListener('click', () => {
                 bodyContainer.classList.toggle('fullscreen-active');
-                iconExpand.classList.toggle('hidden');
-                iconCompress.classList.toggle('hidden');
                 setTimeout(resizeCanvas, 300);
             });
 
             captureButton.addEventListener('click', captureGuide);
+            fullscreenCaptureBtn.addEventListener('click', captureGuide);
             
             resetButton.addEventListener('click', () => {
                 guidePanel.style.display = 'none';
