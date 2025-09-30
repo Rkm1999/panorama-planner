@@ -39,32 +39,59 @@
         .control-panel-grid {
             grid-template-columns: 1fr 2fr;
         }
+        
+        /* Fullscreen styles */
+        body.fullscreen-active header,
+        body.fullscreen-active #controls-panel {
+            display: none;
+        }
+        
+        body.fullscreen-active #camera-viewport {
+            height: 100%;
+        }
+
+        body.fullscreen-active .icon-expand {
+            display: none;
+        }
+
+        body.fullscreen-active .icon-compress {
+            display: block;
+        }
+
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
-<body class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
+<body id="body-container" class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
 
     <!-- Header -->
-    <header class="bg-gray-800 p-3 text-center shadow-lg z-20">
+    <header class="bg-gray-800 p-3 text-center shadow-lg z-20 flex-shrink-0">
         <h1 class="text-xl font-bold">Panorama Planner</h1>
     </header>
 
     <!-- Main Content -->
     <main class="flex-grow flex flex-col relative overflow-hidden">
         <!-- Camera Viewport -->
-        <div id="camera-viewport" class="relative w-full flex-grow bg-black flex items-center justify-center">
+        <div id="camera-viewport" class="relative w-full h-[45%] flex-shrink-0 bg-black flex items-center justify-center transition-all duration-300 ease-in-out">
             <video id="camera-feed" playsinline autoplay class="w-full h-full object-cover"></video>
             <canvas id="overlay-canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
             <div id="permission-message" class="absolute inset-0 bg-gray-900 bg-opacity-80 p-4 text-center flex-col justify-center items-center hidden">
                 <p class="text-lg">Waiting for camera permission...</p>
                 <p class="text-sm text-gray-400 mt-2">Please allow camera access to use this app. If you denied it, you may need to reset permissions in your browser settings.</p>
             </div>
+            <button id="fullscreen-btn" class="absolute top-2 right-2 bg-gray-900 bg-opacity-50 p-2 rounded-full z-10 text-white hover:bg-opacity-75 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-expand h-6 w-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 20.25v-4.5m0 4.5h-4.5m4.5 0L15 15m-6 0L3.75 20.25m16.5-16.5L15 9" />
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-compress h-6 w-6 hidden">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
+                </svg>
+            </button>
         </div>
 
         <!-- Controls Panel -->
-        <div id="controls-panel" class="bg-gray-800 p-4 space-y-4 z-10 overflow-y-auto">
+        <div id="controls-panel" class="bg-gray-800 p-4 space-y-4 z-10 flex-grow overflow-y-auto">
             <!-- Sensor Size -->
             <div class="grid control-panel-grid items-center gap-2">
                 <label for="sensor-size" class="text-sm font-medium">Sensor Size</label>
@@ -141,10 +168,14 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- DOM Elements ---
+            const bodyContainer = document.getElementById('body-container');
             const video = document.getElementById('camera-feed');
             const overlayCanvas = document.getElementById('overlay-canvas');
             const overlayCtx = overlayCanvas.getContext('2d');
             const permissionMessage = document.getElementById('permission-message');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            const iconExpand = fullscreenBtn.querySelector('.icon-expand');
+            const iconCompress = fullscreenBtn.querySelector('.icon-compress');
 
             const controlsPanel = document.getElementById('controls-panel');
             const sensorSelect = document.getElementById('sensor-size');
@@ -203,12 +234,13 @@
             }
             
             function resizeCanvas() {
-                const videoAspectRatio = video.videoWidth / video.videoHeight;
                 const parentRect = video.parentElement.getBoundingClientRect();
+                const videoAspectRatio = video.videoWidth / video.videoHeight;
                 const parentAspectRatio = parentRect.width / parentRect.height;
 
                 let canvasWidth, canvasHeight;
 
+                // Fit video inside parent, maintaining aspect ratio
                 if (videoAspectRatio > parentAspectRatio) {
                     canvasWidth = parentRect.width;
                     canvasHeight = parentRect.width / videoAspectRatio;
@@ -217,8 +249,15 @@
                     canvasWidth = parentRect.height * videoAspectRatio;
                 }
                 
-                overlayCanvas.width = canvasWidth;
-                overlayCanvas.height = canvasHeight;
+                overlayCanvas.width = video.videoWidth;
+                overlayCanvas.height = video.videoHeight;
+
+                // We set the canvas rendering size to the video's native resolution,
+                // but use CSS to scale it down to fit the container.
+                overlayCanvas.style.width = `${canvasWidth}px`;
+                overlayCanvas.style.height = `${canvasHeight}px`;
+                overlayCanvas.style.top = `${(parentRect.height - canvasHeight) / 2}px`;
+                overlayCanvas.style.left = `${(parentRect.width - canvasWidth) / 2}px`;
             }
 
             window.addEventListener('resize', resizeCanvas);
@@ -249,22 +288,15 @@
                 
                 // Adjust for video feed orientation if necessary
                 const videoIsPortrait = video.videoHeight > video.videoWidth;
-                const planningIsPortrait = state.orientation === 'portrait';
-
-                // The FOV we see on screen corresponds to the video's WIDER dimension.
+                
                 let onScreenFov;
                 if(videoIsPortrait) {
-                    onScreenFov = calculateSingleFOV(sensor.height, focalLength); // Phone held vertically
+                    // For a portrait video, the horizontal FOV is based on the sensor's smaller dimension
+                    onScreenFov = calculateSingleFOV(sensor.height, focalLength);
                 } else {
-                    onScreenFov = calculateSingleFOV(sensor.width, focalLength); // Phone held horizontally
+                    // For a landscape video, the horizontal FOV is based on the sensor's wider dimension
+                    onScreenFov = calculateSingleFOV(sensor.width, focalLength);
                 }
-
-                // If planning orientation doesn't match on-screen orientation, use the other dimension for calculation
-                if (videoIsPortrait !== planningIsPortrait) {
-                     const alternateDimension = state.orientation === 'landscape' ? sensor.width : sensor.height;
-                     onScreenFov = calculateSingleFOV(alternateDimension, focalLength);
-                }
-
 
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
 
@@ -279,7 +311,7 @@
             // --- Drawing Logic ---
             function drawOverlay(singleFov, panoFov, panelCount, overlap) {
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
+                
                 const pixelsPerDegree = overlayCanvas.width / singleFov;
                 const panoWidth = panoFov * pixelsPerDegree;
                 const panelWidthNoOverlap = singleFov * (1 - overlap) * pixelsPerDegree;
@@ -289,14 +321,14 @@
                 // Draw main panorama bounding box
                 overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.2)'; // blue-500 with opacity
                 overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-                overlayCtx.lineWidth = 3;
+                overlayCtx.lineWidth = 6; // Thicker line for high-res canvas
                 overlayCtx.fillRect(startX, 0, panoWidth, overlayCanvas.height);
                 overlayCtx.strokeRect(startX, 0, panoWidth, overlayCanvas.height);
                 
                 // Draw panel dividers
                 overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-                overlayCtx.lineWidth = 1;
-                overlayCtx.setLineDash([5, 5]);
+                overlayCtx.lineWidth = 2;
+                overlayCtx.setLineDash([15, 15]);
 
                 for (let i = 1; i < panelCount; i++) {
                     const lineX = startX + (i * panelWidthNoOverlap);
@@ -356,6 +388,14 @@
                 landscapeBtn.classList.add('text-gray-300');
             });
 
+            fullscreenBtn.addEventListener('click', () => {
+                bodyContainer.classList.toggle('fullscreen-active');
+                iconExpand.classList.toggle('hidden');
+                iconCompress.classList.toggle('hidden');
+                // Recalculate canvas size after transition
+                setTimeout(resizeCanvas, 300);
+            });
+
             captureButton.addEventListener('click', captureGuide);
             
             resetButton.addEventListener('click', () => {
@@ -369,3 +409,4 @@
     </script>
 </body>
 </html>
+
