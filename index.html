@@ -169,8 +169,17 @@
 
              <!-- Result Display -->
             <div class="bg-gray-900 rounded-lg p-3 text-center">
-                <p class="text-sm text-gray-400">Calculated Panorama FOV</p>
-                <p id="pano-fov-value" class="text-2xl font-bold text-blue-400">105.4°</p>
+                <p class="text-sm text-gray-400 uppercase tracking-wider">Final Panorama FOV</p>
+                <div class="flex justify-center items-baseline space-x-6 mt-1">
+                    <div>
+                        <span id="pano-fov-value" class="text-2xl font-bold text-blue-400">105.4°</span>
+                        <span class="block text-xs text-gray-500">Horizontal</span>
+                    </div>
+                    <div>
+                        <span id="pano-fov-vertical-value" class="text-2xl font-bold text-blue-400">27.0°</span>
+                        <span class="block text-xs text-gray-500">Vertical</span>
+                    </div>
+                </div>
             </div>
 
 
@@ -184,7 +193,7 @@
         <div id="guide-panel" class="absolute inset-0 bg-gray-900 p-4 z-20 flex-col items-center justify-center text-center hidden">
             <h2 class="text-lg font-bold mb-2">Panorama Composition Guide</h2>
             <p class="text-sm text-gray-400 mb-4">This preview shows your first shot and the full area your panorama will cover.</p>
-            <div class="w-full overflow-x-auto p-2 bg-gray-950 rounded-lg">
+            <div class="w-full overflow-x-auto p-2 bg-gray-950 rounded-lg flex justify-center items-center">
                 <canvas id="guide-canvas" class="rounded-lg"></canvas>
             </div>
             <p class="text-sm mt-4 text-gray-400">Pan right to capture the remaining panels, using the dashed lines as guides.</p>
@@ -221,6 +230,7 @@
             const landscapeBtn = document.getElementById('orientation-landscape');
             const portraitBtn = document.getElementById('orientation-portrait');
             const panoFovValue = document.getElementById('pano-fov-value');
+            const panoFovVerticalValue = document.getElementById('pano-fov-vertical-value');
             
             const captureButton = document.getElementById('capture-button');
             const guidePanel = document.getElementById('guide-panel');
@@ -241,6 +251,7 @@
                 stream: null,
                 lastOnScreenFov: 75,
                 lastSingleFov: 0,
+                lastSingleFovVertical: 0,
             };
 
             // --- Camera Initialization ---
@@ -375,11 +386,18 @@
                 panelCountValue.textContent = panelCount;
                 
                 // Perform calculations for the PLAN
-                const sensorDimension = state.orientation === 'landscape' ? sensor.width : sensor.height;
-                const singleFov = calculateSingleFOV(sensorDimension, focalLength);
+                const horizontalSensorDim = state.orientation === 'landscape' ? sensor.width : sensor.height;
+                const verticalSensorDim = state.orientation === 'landscape' ? sensor.height : sensor.width;
+
+                const singleFov = calculateSingleFOV(horizontalSensorDim, focalLength);
+                const singleFovVertical = calculateSingleFOV(verticalSensorDim, focalLength);
+                
                 state.lastSingleFov = singleFov; // Store for capture guide
+                state.lastSingleFovVertical = singleFovVertical;
+
                 let panoFov = (singleFov * panelCount) - (singleFov * overlap * (panelCount - 1));
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
+                panoFovVerticalValue.textContent = `${singleFovVertical.toFixed(1)}°`;
                 
                 // --- Now calculate the FOV for the LIVE PREVIEW to draw the overlay correctly ---
                 const videoTrack = state.stream ? state.stream.getVideoTracks()[0] : null;
@@ -406,7 +424,7 @@
                 state.lastOnScreenFov = onScreenFov; // Store for capture guide
 
                 // Draw the overlay
-                drawOverlay(onScreenFov, panoFov, panelCount, overlap);
+                drawOverlay(onScreenFov, panoFov, singleFovVertical, panelCount, overlap);
                 
                 if (state.stream) {
                    requestAnimationFrame(updateCalculationsAndDraw);
@@ -414,31 +432,36 @@
             }
             
             // --- Drawing Logic ---
-            function drawOverlay(singleFov, panoFov, panelCount, overlap) {
+            function drawOverlay(phoneFov, panoFov, panoFovVertical, panelCount, overlap) {
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
                 
-                const pixelsPerDegree = overlayCanvas.width / singleFov;
+                const pixelsPerDegree = overlayCanvas.width / phoneFov;
                 const panoWidth = panoFov * pixelsPerDegree;
-                const panelWidthNoOverlap = singleFov * (1 - overlap) * pixelsPerDegree;
+                const panoHeight = panoFovVertical * pixelsPerDegree;
+                const panelWidthDegrees = (panoFov + (panoFovVertical * overlap * (panelCount - 1))) / panelCount; // This is an approximation
+                const panelAdvanceWidth = panelWidthDegrees * (1 - overlap) * pixelsPerDegree;
 
                 const startX = (overlayCanvas.width - panoWidth) / 2;
+                const startY = (overlayCanvas.height - panoHeight) / 2;
                 
                 overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.2)';
                 overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
                 overlayCtx.lineWidth = 6;
-                overlayCtx.fillRect(startX, 0, panoWidth, overlayCanvas.height);
-                overlayCtx.strokeRect(startX, 0, panoWidth, overlayCanvas.height);
+                overlayCtx.fillRect(startX, startY, panoWidth, panoHeight);
+                overlayCtx.strokeRect(startX, startY, panoWidth, panoHeight);
                 
                 overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
                 overlayCtx.lineWidth = 2;
                 overlayCtx.setLineDash([15, 15]);
 
                 for (let i = 1; i < panelCount; i++) {
-                    const lineX = startX + (i * panelWidthNoOverlap);
-                    overlayCtx.beginPath();
-                    overlayCtx.moveTo(lineX, 0);
-                    overlayCtx.lineTo(lineX, overlayCanvas.height);
-                    overlayCtx.stroke();
+                    const lineX = startX + (i * panelAdvanceWidth);
+                     if (lineX > startX && lineX < startX + panoWidth) {
+                        overlayCtx.beginPath();
+                        overlayCtx.moveTo(lineX, startY);
+                        overlayCtx.lineTo(lineX, startY + panoHeight);
+                        overlayCtx.stroke();
+                    }
                 }
                 overlayCtx.setLineDash([]);
             }
@@ -462,32 +485,31 @@
                 // 3. Calculate dimensions based on FOV for accurate scaling
                 const pixelsPerDegree = tempCanvas.width / state.lastOnScreenFov;
                 const plannedPanelWidth = state.lastSingleFov * pixelsPerDegree;
+                const plannedPanelHeight = state.lastSingleFovVertical * pixelsPerDegree;
+
                 const panelAdvanceWidth = plannedPanelWidth * (1 - overlapPercent);
                 const totalGuideWidth = plannedPanelWidth + (panelAdvanceWidth * (panelCount - 1));
-                const imageHeight = (tempCanvas.height / tempCanvas.width) * plannedPanelWidth;
 
                 // 4. Set final guide canvas dimensions
                 guideCanvas.width = totalGuideWidth;
-                guideCanvas.height = imageHeight;
+                guideCanvas.height = plannedPanelHeight;
                 
-                // 5. Crop the first panel from the center of the captured video frame
-                const sx = (tempCanvas.width - plannedPanelWidth) / 2; // Source X for cropping
+                // 5. Draw the entire captured video frame into the first panel's area.
+                // This maintains the visual context, even if stretched, within a correctly-proportioned frame.
                 guideCtx.drawImage(
                     tempCanvas,       // source canvas
-                    sx, 0,            // source x, y
-                    plannedPanelWidth, tempCanvas.height, // source width, height
                     0, 0,             // destination x, y
-                    plannedPanelWidth, imageHeight  // destination width, height
+                    plannedPanelWidth, plannedPanelHeight  // destination width, height
                 );
 
                 // 6. Draw a semi-transparent overlay for the un-captured area
                 guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                guideCtx.fillRect(plannedPanelWidth, 0, totalGuideWidth - plannedPanelWidth, imageHeight);
+                guideCtx.fillRect(plannedPanelWidth, 0, totalGuideWidth - plannedPanelWidth, plannedPanelHeight);
                 
                 // 7. Draw the overall panorama frame
                 guideCtx.strokeStyle = '#3b82f6'; // blue-500
                 guideCtx.lineWidth = 8;
-                guideCtx.strokeRect(0, 0, totalGuideWidth, imageHeight);
+                guideCtx.strokeRect(0, 0, totalGuideWidth, plannedPanelHeight);
 
                 // 8. Draw panel divider lines
                 guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -498,7 +520,7 @@
                     const lineX = i * panelAdvanceWidth;
                     guideCtx.beginPath();
                     guideCtx.moveTo(lineX, 0);
-                    guideCtx.lineTo(lineX, imageHeight);
+                    guideCtx.lineTo(lineX, plannedPanelHeight);
                     guideCtx.stroke();
                 }
                 guideCtx.setLineDash([]);
