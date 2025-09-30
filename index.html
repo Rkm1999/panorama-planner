@@ -254,7 +254,7 @@
                 fullframe: { width: 36, height: 24 },
                 apsc: { width: 23.6, height: 15.7 },
                 micro43: { width: 17.3, height: 13 },
-                phone: { width: 5.6, height: 4.2 } // Approx 1/2.55" sensor
+                phone: { width: 6.66, height: 4.99 } // Approx 1/1.9" sensor
             };
             
             let state = {
@@ -511,69 +511,83 @@
                 const overlapPercent = parseInt(overlapSlider.value) / 100;
                 const panelCount = parseInt(panelCountSlider.value);
                 
-                // **FIX**: Use the same reliable scaling as the live overlay
                 const pixelsPerDegree = tempCanvas.width / state.lastOnScreenHorizontalFov;
                 
-                const longEdgePixels = state.lastSingleFov * pixelsPerDegree;
-                const shortEdgePixels = state.lastSingleFovVertical * pixelsPerDegree;
-
-                // Crop from the center of the video feed
-                const cropSourceWidth = shortEdgePixels;
-                const cropSourceHeight = longEdgePixels;
-                const cropSourceX = (tempCanvas.width - cropSourceWidth) / 2;
-                const cropSourceY = (tempCanvas.height - cropSourceHeight) / 2;
-                
+                const singlePanelLongEdge = state.lastSingleFov * pixelsPerDegree;
+                const singlePanelShortEdge = state.lastSingleFovVertical * pixelsPerDegree;
 
                 if (state.orientation === 'landscape') {
-                    const panelAdvanceWidth = longEdgePixels * (1 - overlapPercent);
-                    const totalGuideWidth = longEdgePixels + (panelAdvanceWidth * (panelCount - 1));
+                    const panelWidth = singlePanelLongEdge;
+                    const panelHeight = singlePanelShortEdge;
+                    const panelAdvance = panelWidth * (1 - overlapPercent);
+                    const totalGuideWidth = panelWidth + (panelAdvance * (panelCount - 1));
+                    
                     guideCanvas.width = totalGuideWidth;
-                    guideCanvas.height = shortEdgePixels;
+                    guideCanvas.height = panelHeight;
                     guideContainer.style.overflowX = 'auto';
                     guideContainer.style.overflowY = 'hidden';
                     guideText.textContent = "Pan right to capture the remaining panels, using the dashed lines as guides.";
                     
-                    guideCtx.drawImage(tempCanvas, cropSourceX, cropSourceY, cropSourceWidth, cropSourceHeight, 0, 0, shortEdgePixels, longEdgePixels);
+                    // Crop the first panel from the center of the captured video frame
+                    const cropX = (tempCanvas.width - panelWidth) / 2;
+                    const cropY = (tempCanvas.height - panelHeight) / 2;
+                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidth, panelHeight, 0, 0, panelWidth, panelHeight);
 
+                    // Draw overlay for remaining panels
                     guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    guideCtx.fillRect(longEdgePixels, 0, totalGuideWidth - longEdgePixels, shortEdgePixels);
+                    guideCtx.fillRect(panelWidth, 0, totalGuideWidth - panelWidth, panelHeight);
+                    
+                    // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
                     guideCtx.lineWidth = 8;
-                    guideCtx.strokeRect(0, 0, totalGuideWidth, shortEdgePixels);
+                    guideCtx.strokeRect(0, 0, totalGuideWidth, panelHeight);
+                    
+                    // Draw divider lines
                     guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                     guideCtx.lineWidth = 3;
                     guideCtx.setLineDash([20, 15]);
                     for (let i = 1; i < panelCount; i++) {
-                        const lineX = i * panelAdvanceWidth;
+                        const lineX = i * panelAdvance;
                         guideCtx.beginPath();
                         guideCtx.moveTo(lineX, 0);
-                        guideCtx.lineTo(lineX, shortEdgePixels);
+                        guideCtx.lineTo(lineX, panelHeight);
                         guideCtx.stroke();
                     }
                 } else { // Portrait
-                    const panelAdvanceHeight = longEdgePixels * (1 - overlapPercent);
-                    const totalGuideHeight = longEdgePixels + (panelAdvanceHeight * (panelCount - 1));
-                    guideCanvas.width = shortEdgePixels;
+                    const panelWidth = singlePanelShortEdge;
+                    const panelHeight = singlePanelLongEdge;
+                    const panelAdvance = panelHeight * (1 - overlapPercent);
+                    const totalGuideHeight = panelHeight + (panelAdvance * (panelCount - 1));
+
+                    guideCanvas.width = panelWidth;
                     guideCanvas.height = totalGuideHeight;
                     guideContainer.style.overflowY = 'auto';
                     guideContainer.style.overflowX = 'hidden';
                     guideText.textContent = "Pan up to capture the remaining panels, using the dashed lines as guides.";
 
-                    guideCtx.drawImage(tempCanvas, cropSourceX, cropSourceY, cropSourceWidth, cropSourceHeight, 0, 0, shortEdgePixels, longEdgePixels);
+                    // Crop the first panel from the center of the captured video frame
+                    const cropX = (tempCanvas.width - panelWidth) / 2;
+                    const cropY = (tempCanvas.height - panelHeight) / 2;
+                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidth, panelHeight, 0, 0, panelWidth, panelHeight);
 
+                    // Draw overlay for remaining panels
                     guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    guideCtx.fillRect(0, longEdgePixels, shortEdgePixels, totalGuideHeight - longEdgePixels);
+                    guideCtx.fillRect(0, panelHeight, panelWidth, totalGuideHeight - panelHeight);
+
+                    // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
                     guideCtx.lineWidth = 8;
-                    guideCtx.strokeRect(0, 0, shortEdgePixels, totalGuideHeight);
+                    guideCtx.strokeRect(0, 0, panelWidth, totalGuideHeight);
+                    
+                    // Draw divider lines
                     guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                     guideCtx.lineWidth = 3;
                     guideCtx.setLineDash([20, 15]);
                     for (let i = 1; i < panelCount; i++) {
-                        const lineY = i * panelAdvanceHeight;
+                        const lineY = i * panelAdvance;
                         guideCtx.beginPath();
                         guideCtx.moveTo(0, lineY);
-                        guideCtx.lineTo(shortEdgePixels, lineY);
+                        guideCtx.lineTo(panelWidth, lineY);
                         guideCtx.stroke();
                     }
                 }
@@ -622,3 +636,4 @@
     </script>
 </body>
 </html>
+
