@@ -81,8 +81,7 @@
                 <p class="text-sm text-gray-400 mt-2">Please allow camera access to use this app. If you denied it, you may need to reset permissions in your browser settings.</p>
             </div>
             <button id="fullscreen-btn" class="absolute top-2 right-2 bg-gray-900 bg-opacity-50 p-2 rounded-full z-10 text-white hover:bg-opacity-75 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-expand h-6 w-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 20.25v-4.5m0 4.5h-4.5m4.5 0L15 15m-6 0L3.75 20.25m16.5-16.5L15 9" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 L9 9M20.25 20.25v-4.5m0 4.5h-4.5m4.5 0L15 15m-6 0L3.75 20.25m16.5-16.5L15 9" />
                 </svg>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-compress h-6 w-6 hidden">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
@@ -103,6 +102,17 @@
                  <div class="grid control-panel-grid items-center gap-2">
                     <span class="text-sm font-medium text-gray-300">Detected FL</span>
                     <span id="detected-fl-info" class="text-sm text-gray-400 font-mono">N/A</span>
+                </div>
+                <!-- Phone Focal Length (Manual Override) -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label for="phone-fl-select" class="text-sm font-medium">Phone FL (Manual)</label>
+                    <select id="phone-fl-select" class="bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm w-full">
+                        <option value="auto" selected>Auto-Detect</option>
+                        <option value="13">Ultrawide (~13mm)</option>
+                        <option value="24">Wide (~24mm)</option>
+                        <option value="50">Standard (~50mm)</option>
+                        <option value="77">Telephoto (~77mm)</option>
+                    </select>
                 </div>
             </div>
 
@@ -197,6 +207,7 @@
             const controlsPanel = document.getElementById('controls-panel');
             const cameraSelect = document.getElementById('camera-select');
             const detectedFLInfo = document.getElementById('detected-fl-info');
+            const phoneFLSelect = document.getElementById('phone-fl-select');
             const sensorSelect = document.getElementById('sensor-size');
             const focalLengthSlider = document.getElementById('focal-length');
             const focalLengthValue = document.getElementById('focal-length-value');
@@ -367,14 +378,25 @@
                 // --- Now calculate the FOV for the LIVE PREVIEW to draw the overlay correctly ---
                 const videoTrack = state.stream ? state.stream.getVideoTracks()[0] : null;
                 const videoSettings = videoTrack ? videoTrack.getSettings() : {};
+                const manualPhoneFL = phoneFLSelect.value;
 
                 let onScreenFov = 75; // Default fallback FOV
-                if (videoSettings.focalLength) {
+
+                if (manualPhoneFL !== 'auto') {
+                    // User has selected a manual override (value is 35mm equivalent)
+                    const fullFrameSensor = SENSOR_SIZES.fullframe;
+                    const videoIsPortrait = video.videoHeight > video.videoWidth;
+                    const previewSensorDimForCalc = videoIsPortrait ? fullFrameSensor.height : fullFrameSensor.width;
+                    onScreenFov = calculateSingleFOV(previewSensorDimForCalc, parseInt(manualPhoneFL));
+
+                } else if (videoSettings.focalLength) {
+                    // Auto-detect is selected and focal length is available from the API
                     const phoneSensor = SENSOR_SIZES.phone;
                     const videoIsPortrait = video.videoHeight > video.videoWidth;
                     const previewSensorDim = videoIsPortrait ? phoneSensor.height : phoneSensor.width;
                     onScreenFov = calculateSingleFOV(previewSensorDim, videoSettings.focalLength);
                 }
+                // Else, it will use the default fallback FOV of 75 degrees.
 
                 // Draw the overlay
                 drawOverlay(onScreenFov, panoFov, panelCount, overlap);
@@ -440,7 +462,7 @@
             }
 
             // --- Event Listeners ---
-            [focalLengthSlider, overlapSlider, panelCountSlider, sensorSelect].forEach(el => {
+            [focalLengthSlider, overlapSlider, panelCountSlider, sensorSelect, phoneFLSelect].forEach(el => {
                 el.addEventListener('input', () => { /* Trigger animation frame */ });
             });
 
