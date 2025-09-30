@@ -92,53 +92,67 @@
 
         <!-- Controls Panel -->
         <div id="controls-panel" class="bg-gray-800 p-4 space-y-4 z-10 flex-grow overflow-y-auto">
-            <!-- Sensor Size -->
-            <div class="grid control-panel-grid items-center gap-2">
-                <label for="sensor-size" class="text-sm font-medium">Sensor Size</label>
-                <select id="sensor-size" class="bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm w-full">
-                    <option value="phone">Phone (1/2.55")</option>
-                    <option value="apsc">APS-C</option>
-                    <option value="fullframe" selected>Full-Frame</option>
-                    <option value="micro43">Micro 4/3</option>
-                </select>
-            </div>
-
-            <!-- Focal Length -->
-            <div class="grid control-panel-grid items-center gap-2">
-                <div class="flex items-center space-x-2">
-                    <label for="focal-length" class="text-sm font-medium">Focal Length</label>
-                    <button id="detect-fl-btn" class="bg-gray-600 hover:bg-gray-500 text-xs px-2 py-1 rounded-md">Detect</button>
+            
+            <div class="space-y-4 border-b border-gray-700 pb-4">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Phone Preview Settings</h3>
+                <!-- Phone Lens Selector -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label for="camera-select" class="text-sm font-medium">Phone Lens</label>
+                    <select id="camera-select" class="bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm w-full"></select>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <input type="range" id="focal-length" min="12" max="200" value="50" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
-                    <span id="focal-length-value" class="text-sm font-mono w-12 text-center">50mm</span>
+                 <div class="grid control-panel-grid items-center gap-2">
+                    <span class="text-sm font-medium text-gray-300">Detected FL</span>
+                    <span id="detected-fl-info" class="text-sm text-gray-400 font-mono">N/A</span>
                 </div>
             </div>
 
-            <!-- Overlap -->
-            <div class="grid control-panel-grid items-center gap-2">
-                <label for="overlap" class="text-sm font-medium">Overlap</label>
-                <div class="flex items-center space-x-2">
-                    <input type="range" id="overlap" min="10" max="50" value="30" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
-                    <span id="overlap-value" class="text-sm font-mono w-12 text-center">30%</span>
+            <div class="space-y-4 pt-2">
+                 <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Panorama Plan Settings</h3>
+                <!-- Sensor Size -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label for="sensor-size" class="text-sm font-medium">Sensor Size</label>
+                    <select id="sensor-size" class="bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm w-full">
+                        <option value="phone">Phone (1/2.55")</option>
+                        <option value="apsc">APS-C</option>
+                        <option value="fullframe" selected>Full-Frame</option>
+                        <option value="micro43">Micro 4/3</option>
+                    </select>
                 </div>
-            </div>
 
-            <!-- Panel Count -->
-            <div class="grid control-panel-grid items-center gap-2">
-                <label for="panel-count" class="text-sm font-medium">Panels</label>
-                <div class="flex items-center space-x-2">
-                    <input type="range" id="panel-count" min="2" max="15" value="5" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
-                    <span id="panel-count-value" class="text-sm font-mono w-12 text-center">5</span>
+                <!-- Target Focal Length -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label for="focal-length" class="text-sm font-medium">Target Focal Length</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="range" id="focal-length" min="12" max="200" value="50" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
+                        <span id="focal-length-value" class="text-sm font-mono w-12 text-center">50mm</span>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Orientation -->
-            <div class="grid control-panel-grid items-center gap-2">
-                <label class="text-sm font-medium">Orientation</label>
-                <div class="flex rounded-lg bg-gray-700 p-1">
-                    <button id="orientation-landscape" class="w-full bg-blue-500 text-white rounded-md py-1 px-3 text-sm font-semibold">Landscape</button>
-                    <button id="orientation-portrait" class="w-full text-gray-300 rounded-md py-1 px-3 text-sm">Portrait</button>
+                <!-- Overlap -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label for="overlap" class="text-sm font-medium">Overlap</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="range" id="overlap" min="10" max="50" value="30" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
+                        <span id="overlap-value" class="text-sm font-mono w-12 text-center">30%</span>
+                    </div>
+                </div>
+
+                <!-- Panel Count -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label for="panel-count" class="text-sm font-medium">Panels</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="range" id="panel-count" min="2" max="15" value="5" class="w-full h-2 rounded-lg appearance-none cursor-pointer">
+                        <span id="panel-count-value" class="text-sm font-mono w-12 text-center">5</span>
+                    </div>
+                </div>
+
+                <!-- Orientation -->
+                <div class="grid control-panel-grid items-center gap-2">
+                    <label class="text-sm font-medium">Orientation</label>
+                    <div class="flex rounded-lg bg-gray-700 p-1">
+                        <button id="orientation-landscape" class="w-full bg-blue-500 text-white rounded-md py-1 px-3 text-sm font-semibold">Landscape</button>
+                        <button id="orientation-portrait" class="w-full text-gray-300 rounded-md py-1 px-3 text-sm">Portrait</button>
+                    </div>
                 </div>
             </div>
 
@@ -181,10 +195,11 @@
             const iconCompress = fullscreenBtn.querySelector('.icon-compress');
 
             const controlsPanel = document.getElementById('controls-panel');
+            const cameraSelect = document.getElementById('camera-select');
+            const detectedFLInfo = document.getElementById('detected-fl-info');
             const sensorSelect = document.getElementById('sensor-size');
             const focalLengthSlider = document.getElementById('focal-length');
             const focalLengthValue = document.getElementById('focal-length-value');
-            const detectFLBtn = document.getElementById('detect-fl-btn');
             const overlapSlider = document.getElementById('overlap');
             const overlapValue = document.getElementById('overlap-value');
             const panelCountSlider = document.getElementById('panel-count');
@@ -213,22 +228,54 @@
             };
 
             // --- Camera Initialization ---
-            async function startCamera() {
-                permissionMessage.style.display = 'flex';
+            async function populateCameraList() {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { 
-                            facingMode: 'environment',
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 }
-                        }
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    
+                    cameraSelect.innerHTML = '';
+                    videoDevices.forEach((device, index) => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        // Try to create a user-friendly label
+                        option.text = device.label || `Camera ${index + 1}`;
+                        cameraSelect.appendChild(option);
                     });
+                    
+                    if (videoDevices.length > 0) {
+                        await startCamera(videoDevices[0].deviceId);
+                    }
+                } catch (err) {
+                     console.error("Error enumerating devices:", err);
+                }
+            }
+            
+            async function startCamera(deviceId) {
+                // Stop any existing stream
+                if (state.stream) {
+                    state.stream.getTracks().forEach(track => track.stop());
+                }
+                
+                permissionMessage.style.display = 'flex';
+                const constraints = {
+                    video: {
+                        deviceId: deviceId ? { exact: deviceId } : undefined,
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+                
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
                     state.stream = stream;
                     video.srcObject = stream;
                     video.onloadedmetadata = () => {
                         permissionMessage.style.display = 'none';
                         video.play();
                         resizeCanvas();
+                        updateDetectedFocalLengthInfo();
+                        // Restart animation loop if it was stopped
                         requestAnimationFrame(updateCalculationsAndDraw);
                     };
                 } catch (err) {
@@ -244,7 +291,6 @@
 
                 let canvasWidth, canvasHeight;
 
-                // Fit video inside parent, maintaining aspect ratio
                 if (videoAspectRatio > parentAspectRatio) {
                     canvasWidth = parentRect.width;
                     canvasHeight = parentRect.width / videoAspectRatio;
@@ -256,8 +302,6 @@
                 overlayCanvas.width = video.videoWidth;
                 overlayCanvas.height = video.videoHeight;
 
-                // We set the canvas rendering size to the video's native resolution,
-                // but use CSS to scale it down to fit the container.
                 overlayCanvas.style.width = `${canvasWidth}px`;
                 overlayCanvas.style.height = `${canvasHeight}px`;
                 overlayCanvas.style.top = `${(parentRect.height - canvasHeight) / 2}px`;
@@ -272,48 +316,38 @@
                 return 2 * Math.atan(sensorDimension / (2 * focalLength)) * (180 / Math.PI);
             }
             
-            function detectFocalLength() {
-                if (!state.stream) return;
+            function updateDetectedFocalLengthInfo() {
+                if (!state.stream) {
+                    detectedFLInfo.textContent = 'N/A';
+                    return;
+                }
                 const track = state.stream.getVideoTracks()[0];
                 if (typeof track.getSettings !== 'function') {
-                    showTemporaryMessage(detectFLBtn, 'Unsupported');
+                    detectedFLInfo.textContent = 'Unsupported';
                     return;
                 }
                 
                 const settings = track.getSettings();
                 if (settings.focalLength) {
                     const nativeFocalLength = settings.focalLength;
-                    const selectedSensorKey = sensorSelect.value;
-                    const selectedSensor = SENSOR_SIZES[selectedSensorKey];
+                    // For phone camera focal length, we'll calculate its 35mm equivalent based on the "Phone" sensor size preset
+                    const phoneSensor = SENSOR_SIZES.phone;
                     const fullFrameSensor = SENSOR_SIZES.fullframe;
 
-                    const selectedSensorDiagonal = Math.sqrt(selectedSensor.width**2 + selectedSensor.height**2);
+                    const phoneSensorDiagonal = Math.sqrt(phoneSensor.width**2 + phoneSensor.height**2);
                     const fullFrameDiagonal = Math.sqrt(fullFrameSensor.width**2 + fullFrameSensor.height**2);
                     
-                    const cropFactor = fullFrameDiagonal / selectedSensorDiagonal;
+                    const cropFactor = fullFrameDiagonal / phoneSensorDiagonal;
                     const equivalentFocalLength = Math.round(nativeFocalLength * cropFactor);
                     
-                    focalLengthSlider.value = equivalentFocalLength;
-                    // Manually trigger the input event to update the UI and recalculate the overlay
-                    focalLengthSlider.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-
-                    showTemporaryMessage(detectFLBtn, `Set to ${equivalentFocalLength}mm`);
-
+                    detectedFLInfo.textContent = `~${equivalentFocalLength}mm (35mm equiv.)`;
                 } else {
-                    showTemporaryMessage(detectFLBtn, 'Not Found');
+                    detectedFLInfo.textContent = 'Not Found';
                 }
-            }
-            
-            function showTemporaryMessage(element, message) {
-                const originalText = element.textContent;
-                element.textContent = message;
-                setTimeout(() => {
-                    element.textContent = originalText;
-                }, 2000);
             }
 
             function updateCalculationsAndDraw() {
-                // Read values from controls
+                // Read values from controls for the PLAN
                 const sensor = SENSOR_SIZES[sensorSelect.value];
                 const focalLength = parseInt(focalLengthSlider.value);
                 const overlap = parseInt(overlapSlider.value) / 100;
@@ -324,25 +358,23 @@
                 overlapValue.textContent = `${overlap * 100}%`;
                 panelCountValue.textContent = panelCount;
                 
-                // Perform calculations
+                // Perform calculations for the PLAN
                 const sensorDimension = state.orientation === 'landscape' ? sensor.width : sensor.height;
                 const singleFov = calculateSingleFOV(sensorDimension, focalLength);
-                
                 let panoFov = (singleFov * panelCount) - (singleFov * overlap * (panelCount - 1));
-                
-                // Adjust for video feed orientation if necessary
-                const videoIsPortrait = video.videoHeight > video.videoWidth;
-                
-                let onScreenFov;
-                if(videoIsPortrait) {
-                    // For a portrait video, the horizontal FOV is based on the sensor's smaller dimension
-                    onScreenFov = calculateSingleFOV(sensor.height, focalLength);
-                } else {
-                    // For a landscape video, the horizontal FOV is based on the sensor's wider dimension
-                    onScreenFov = calculateSingleFOV(sensor.width, focalLength);
-                }
-
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
+                
+                // --- Now calculate the FOV for the LIVE PREVIEW to draw the overlay correctly ---
+                const videoTrack = state.stream ? state.stream.getVideoTracks()[0] : null;
+                const videoSettings = videoTrack ? videoTrack.getSettings() : {};
+
+                let onScreenFov = 75; // Default fallback FOV
+                if (videoSettings.focalLength) {
+                    const phoneSensor = SENSOR_SIZES.phone;
+                    const videoIsPortrait = video.videoHeight > video.videoWidth;
+                    const previewSensorDim = videoIsPortrait ? phoneSensor.height : phoneSensor.width;
+                    onScreenFov = calculateSingleFOV(previewSensorDim, videoSettings.focalLength);
+                }
 
                 // Draw the overlay
                 drawOverlay(onScreenFov, panoFov, panelCount, overlap);
@@ -362,14 +394,12 @@
 
                 const startX = (overlayCanvas.width - panoWidth) / 2;
                 
-                // Draw main panorama bounding box
-                overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.2)'; // blue-500 with opacity
+                overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.2)';
                 overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-                overlayCtx.lineWidth = 6; // Thicker line for high-res canvas
+                overlayCtx.lineWidth = 6;
                 overlayCtx.fillRect(startX, 0, panoWidth, overlayCanvas.height);
                 overlayCtx.strokeRect(startX, 0, panoWidth, overlayCanvas.height);
                 
-                // Draw panel dividers
                 overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
                 overlayCtx.lineWidth = 2;
                 overlayCtx.setLineDash([15, 15]);
@@ -411,12 +441,12 @@
 
             // --- Event Listeners ---
             [focalLengthSlider, overlapSlider, panelCountSlider, sensorSelect].forEach(el => {
-                el.addEventListener('input', () => {
-                    // Just trigger the next animation frame which reads the values
-                });
+                el.addEventListener('input', () => { /* Trigger animation frame */ });
             });
 
-            detectFLBtn.addEventListener('click', detectFocalLength);
+            cameraSelect.addEventListener('change', (e) => {
+                startCamera(e.target.value);
+            });
 
             landscapeBtn.addEventListener('click', () => {
                 state.orientation = 'landscape';
@@ -438,7 +468,6 @@
                 bodyContainer.classList.toggle('fullscreen-active');
                 iconExpand.classList.toggle('hidden');
                 iconCompress.classList.toggle('hidden');
-                // Recalculate canvas size after transition
                 setTimeout(resizeCanvas, 300);
             });
 
@@ -450,7 +479,7 @@
             });
             
             // --- Start the app ---
-            startCamera();
+            populateCameraList();
         });
     </script>
 </body>
