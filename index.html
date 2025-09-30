@@ -239,6 +239,8 @@
             let state = {
                 orientation: 'landscape', // 'landscape' or 'portrait'
                 stream: null,
+                lastOnScreenFov: 75,
+                lastSingleFov: 0,
             };
 
             // --- Camera Initialization ---
@@ -375,6 +377,7 @@
                 // Perform calculations for the PLAN
                 const sensorDimension = state.orientation === 'landscape' ? sensor.width : sensor.height;
                 const singleFov = calculateSingleFOV(sensorDimension, focalLength);
+                state.lastSingleFov = singleFov; // Store for capture guide
                 let panoFov = (singleFov * panelCount) - (singleFov * overlap * (panelCount - 1));
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
                 
@@ -400,6 +403,7 @@
                     onScreenFov = calculateSingleFOV(previewSensorDim, videoSettings.focalLength);
                 }
                 // Else, it will use the default fallback FOV of 75 degrees.
+                state.lastOnScreenFov = onScreenFov; // Store for capture guide
 
                 // Draw the overlay
                 drawOverlay(onScreenFov, panoFov, panelCount, overlap);
@@ -444,7 +448,7 @@
                 controlsPanel.classList.add('hidden');
                 guidePanel.style.display = 'flex';
 
-                // 1. Capture the current frame
+                // 1. Capture the current full video frame
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = video.videoWidth;
                 tempCanvas.height = video.videoHeight;
@@ -454,25 +458,31 @@
                 // 2. Get panorama settings
                 const overlapPercent = parseInt(overlapSlider.value) / 100;
                 const panelCount = parseInt(panelCountSlider.value);
-                
-                // 3. Calculate dimensions for the guide
-                const imageWidth = tempCanvas.width;
-                const imageHeight = tempCanvas.height;
-                const overlapPixels = imageWidth * overlapPercent;
-                const panelAdvanceWidth = imageWidth - overlapPixels; // How much to pan for each new shot
 
-                const totalGuideWidth = imageWidth + (panelAdvanceWidth * (panelCount - 1));
+                // 3. Calculate dimensions based on FOV for accurate scaling
+                const pixelsPerDegree = tempCanvas.width / state.lastOnScreenFov;
+                const plannedPanelWidth = state.lastSingleFov * pixelsPerDegree;
+                const panelAdvanceWidth = plannedPanelWidth * (1 - overlapPercent);
+                const totalGuideWidth = plannedPanelWidth + (panelAdvanceWidth * (panelCount - 1));
+                const imageHeight = (tempCanvas.height / tempCanvas.width) * plannedPanelWidth;
 
                 // 4. Set final guide canvas dimensions
                 guideCanvas.width = totalGuideWidth;
                 guideCanvas.height = imageHeight;
                 
-                // 5. Draw the captured image on the left
-                guideCtx.drawImage(tempCanvas, 0, 0);
+                // 5. Crop the first panel from the center of the captured video frame
+                const sx = (tempCanvas.width - plannedPanelWidth) / 2; // Source X for cropping
+                guideCtx.drawImage(
+                    tempCanvas,       // source canvas
+                    sx, 0,            // source x, y
+                    plannedPanelWidth, tempCanvas.height, // source width, height
+                    0, 0,             // destination x, y
+                    plannedPanelWidth, imageHeight  // destination width, height
+                );
 
                 // 6. Draw a semi-transparent overlay for the un-captured area
                 guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                guideCtx.fillRect(imageWidth, 0, totalGuideWidth - imageWidth, imageHeight);
+                guideCtx.fillRect(plannedPanelWidth, 0, totalGuideWidth - plannedPanelWidth, imageHeight);
                 
                 // 7. Draw the overall panorama frame
                 guideCtx.strokeStyle = '#3b82f6'; // blue-500
