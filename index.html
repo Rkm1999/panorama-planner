@@ -427,25 +427,55 @@
                 const videoTrack = state.stream ? state.stream.getVideoTracks()[0] : null;
                 const videoSettings = videoTrack ? videoTrack.getSettings() : {};
                 const manualPhoneFL = phoneFLSelect.value;
-                let onScreenVerticalFov = 45; // Default fallback FOV
+                
+                let onScreenVerticalFov = 45; // Fallback
+                let onScreenHorizontalFov = 75; // Fallback
+
+                const videoIsPortrait = overlayCanvas.height > overlayCanvas.width && overlayCanvas.width > 0;
 
                 if (manualPhoneFL !== 'auto') {
+                    const fl = parseInt(manualPhoneFL);
                     const fullFrameSensor = SENSOR_SIZES.fullframe;
-                    onScreenVerticalFov = calculateSingleFOV(fullFrameSensor.height, parseInt(manualPhoneFL));
+
+                    // We assume the equivalent focal length is for a 16:9 video aspect ratio,
+                    // as this is standard for video. A 16:9 crop of a 36mm wide FF sensor is 36mm x 20.25mm.
+                    const sensorWidthFor16x9 = fullFrameSensor.width; // 36mm
+                    const sensorHeightFor16x9 = fullFrameSensor.width * (9/16); // 20.25mm
+
+                    const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
+                    const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
+
+                    if (videoIsPortrait) {
+                        onScreenHorizontalFov = landscapeVFOV;
+                        onScreenVerticalFov = landscapeHFOV;
+                    } else {
+                        onScreenHorizontalFov = landscapeHFOV;
+                        onScreenVerticalFov = landscapeVFOV;
+                    }
+
                 } else if (videoSettings.focalLength) {
-                    const phoneSensor = SENSOR_SIZES.phone;
-                    onScreenVerticalFov = calculateSingleFOV(phoneSensor.height, videoSettings.focalLength);
+                    const fl = videoSettings.focalLength;
+                    const phoneSensor = SENSOR_SIZES.phone; // This is a 4:3 sensor
+                    // Video is a 16:9 crop from the center of the 4:3 sensor.
+                    const sensorWidthFor16x9 = phoneSensor.width; // 6.66mm
+                    const sensorHeightFor16x9 = phoneSensor.width * (9/16); // 3.746mm
+
+                    const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
+                    const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
+
+                    if (videoIsPortrait) {
+                        onScreenHorizontalFov = landscapeVFOV;
+                        onScreenVerticalFov = landscapeHFOV;
+                    } else {
+                        onScreenHorizontalFov = landscapeHFOV;
+                        onScreenVerticalFov = landscapeVFOV;
+                    }
                 }
                 
                 state.lastOnScreenVerticalFov = onScreenVerticalFov;
-
-                // **FIX START**: Calculate horizontal FOV and use it for scaling
-                const videoAspectRatio = (overlayCanvas.width / overlayCanvas.height) || (16/9);
-                const onScreenHorizontalFov = 2 * Math.atan(Math.tan(onScreenVerticalFov * Math.PI / 360) * videoAspectRatio) * 180 / Math.PI;
                 state.lastOnScreenHorizontalFov = onScreenHorizontalFov;
 
-                drawOverlay(onScreenHorizontalFov, panoFov, shortEdgeFov, panelCount, overlap);
-                // **FIX END**
+                drawOverlay(onScreenHorizontalFov, onScreenVerticalFov, panoFov, shortEdgeFov, panelCount, overlap);
                 
                 if (state.stream) {
                     requestAnimationFrame(updateCalculationsAndDraw);
@@ -453,16 +483,14 @@
             }
             
             // --- Drawing Logic ---
-            function drawOverlay(phoneHorizontalFov, panoTotalLongFov, panoShortFov, panelCount, overlap) {
+            function drawOverlay(phoneHorizontalFov, phoneVerticalFov, panoTotalLongFov, panoShortFov, panelCount, overlap) {
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
                 
-                // **FIX**: Base the scaling on the canvas WIDTH and the phone's HORIZONTAL FOV.
-                // This is more reliable for standard landscape video streams.
-                const pixelsPerDegree = overlayCanvas.width / phoneHorizontalFov;
+                const pixelsPerDegreeH = overlayCanvas.width / phoneHorizontalFov;
+                const pixelsPerDegreeV = overlayCanvas.height / phoneVerticalFov;
                 
-                // These calculations correctly define a vertically-oriented panorama box
-                const panoWidth = panoShortFov * pixelsPerDegree;
-                const panoHeight = panoTotalLongFov * pixelsPerDegree;
+                const panoWidth = panoShortFov * pixelsPerDegreeH;
+                const panoHeight = panoTotalLongFov * pixelsPerDegreeV;
                 
                 const startX = (overlayCanvas.width - panoWidth) / 2;
                 const startY = (overlayCanvas.height - panoHeight) / 2;
@@ -479,7 +507,7 @@
                 overlayCtx.setLineDash([15, 15]);
 
                 const singlePanelLongFov = state.lastSingleFov;
-                const panelAdvancePixels = (singlePanelLongFov * (1 - overlap)) * pixelsPerDegree;
+                const panelAdvancePixels = (singlePanelLongFov * (1 - overlap)) * pixelsPerDegreeV;
                 
                 // The overlay is always drawn as a vertical box, so we draw horizontal lines to divide the height into panels.
                 for (let i = 1; i < panelCount; i++) {
@@ -511,36 +539,39 @@
                 const overlapPercent = parseInt(overlapSlider.value) / 100;
                 const panelCount = parseInt(panelCountSlider.value);
                 
-                const pixelsPerDegree = tempCanvas.width / state.lastOnScreenHorizontalFov;
+                const pixelsPerDegreeH = tempCanvas.width / state.lastOnScreenHorizontalFov;
+                const pixelsPerDegreeV = tempCanvas.height / state.lastOnScreenVerticalFov;
                 
-                const singlePanelLongEdge = state.lastSingleFov * pixelsPerDegree;
-                const singlePanelShortEdge = state.lastSingleFovVertical * pixelsPerDegree;
+                const plannedPanelWidthDeg = state.orientation === 'landscape' ? state.lastSingleFov : state.lastSingleFovVertical;
+                const plannedPanelHeightDeg = state.orientation === 'landscape' ? state.lastSingleFovVertical : state.lastSingleFov;
+
+                const panelWidthPx = plannedPanelWidthDeg * pixelsPerDegreeH;
+                const panelHeightPx = plannedPanelHeightDeg * pixelsPerDegreeV;
+
 
                 if (state.orientation === 'landscape') {
-                    const panelWidth = singlePanelLongEdge;
-                    const panelHeight = singlePanelShortEdge;
-                    const panelAdvance = panelWidth * (1 - overlapPercent);
-                    const totalGuideWidth = panelWidth + (panelAdvance * (panelCount - 1));
+                    const panelAdvance = panelWidthPx * (1 - overlapPercent);
+                    const totalGuideWidth = panelWidthPx + (panelAdvance * (panelCount - 1));
                     
                     guideCanvas.width = totalGuideWidth;
-                    guideCanvas.height = panelHeight;
+                    guideCanvas.height = panelHeightPx;
                     guideContainer.style.overflowX = 'auto';
                     guideContainer.style.overflowY = 'hidden';
                     guideText.textContent = "Pan right to capture the remaining panels, using the dashed lines as guides.";
                     
                     // Crop the first panel from the center of the captured video frame
-                    const cropX = (tempCanvas.width - panelWidth) / 2;
-                    const cropY = (tempCanvas.height - panelHeight) / 2;
-                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidth, panelHeight, 0, 0, panelWidth, panelHeight);
+                    const cropX = (tempCanvas.width - panelWidthPx) / 2;
+                    const cropY = (tempCanvas.height - panelHeightPx) / 2;
+                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidthPx, panelHeightPx, 0, 0, panelWidthPx, panelHeightPx);
 
                     // Draw overlay for remaining panels
                     guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    guideCtx.fillRect(panelWidth, 0, totalGuideWidth - panelWidth, panelHeight);
+                    guideCtx.fillRect(panelWidthPx, 0, totalGuideWidth - panelWidthPx, panelHeightPx);
                     
                     // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
                     guideCtx.lineWidth = 8;
-                    guideCtx.strokeRect(0, 0, totalGuideWidth, panelHeight);
+                    guideCtx.strokeRect(0, 0, totalGuideWidth, panelHeightPx);
                     
                     // Draw divider lines
                     guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -550,34 +581,32 @@
                         const lineX = i * panelAdvance;
                         guideCtx.beginPath();
                         guideCtx.moveTo(lineX, 0);
-                        guideCtx.lineTo(lineX, panelHeight);
+                        guideCtx.lineTo(lineX, panelHeightPx);
                         guideCtx.stroke();
                     }
                 } else { // Portrait
-                    const panelWidth = singlePanelShortEdge;
-                    const panelHeight = singlePanelLongEdge;
-                    const panelAdvance = panelHeight * (1 - overlapPercent);
-                    const totalGuideHeight = panelHeight + (panelAdvance * (panelCount - 1));
+                    const panelAdvance = panelHeightPx * (1 - overlapPercent);
+                    const totalGuideHeight = panelHeightPx + (panelAdvance * (panelCount - 1));
 
-                    guideCanvas.width = panelWidth;
+                    guideCanvas.width = panelWidthPx;
                     guideCanvas.height = totalGuideHeight;
                     guideContainer.style.overflowY = 'auto';
                     guideContainer.style.overflowX = 'hidden';
                     guideText.textContent = "Pan up to capture the remaining panels, using the dashed lines as guides.";
 
                     // Crop the first panel from the center of the captured video frame
-                    const cropX = (tempCanvas.width - panelWidth) / 2;
-                    const cropY = (tempCanvas.height - panelHeight) / 2;
-                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidth, panelHeight, 0, 0, panelWidth, panelHeight);
+                    const cropX = (tempCanvas.width - panelWidthPx) / 2;
+                    const cropY = (tempCanvas.height - panelHeightPx) / 2;
+                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidthPx, panelHeightPx, 0, 0, panelWidthPx, panelHeightPx);
 
                     // Draw overlay for remaining panels
                     guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    guideCtx.fillRect(0, panelHeight, panelWidth, totalGuideHeight - panelHeight);
+                    guideCtx.fillRect(0, panelHeightPx, panelWidthPx, totalGuideHeight - panelHeightPx);
 
                     // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
                     guideCtx.lineWidth = 8;
-                    guideCtx.strokeRect(0, 0, panelWidth, totalGuideHeight);
+                    guideCtx.strokeRect(0, 0, panelWidthPx, totalGuideHeight);
                     
                     // Draw divider lines
                     guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -587,7 +616,7 @@
                         const lineY = i * panelAdvance;
                         guideCtx.beginPath();
                         guideCtx.moveTo(0, lineY);
-                        guideCtx.lineTo(panelWidth, lineY);
+                        guideCtx.lineTo(panelWidthPx, lineY);
                         guideCtx.stroke();
                     }
                 }
@@ -636,4 +665,5 @@
     </script>
 </body>
 </html>
+
 
