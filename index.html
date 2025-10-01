@@ -200,7 +200,7 @@
         <!-- Guide Panel -->
         <div id="guide-panel" class="absolute inset-0 bg-gray-900 p-4 z-20 flex-col items-center justify-center text-center hidden">
             <h2 class="text-lg font-bold mb-2">Panorama Composition Guide</h2>
-            <p class="text-sm text-gray-400 mb-4">This preview shows your first shot and the full area your panorama will cover.</p>
+            <p class="text-sm text-gray-400 mb-4">This preview shows the full area your panorama will cover.</p>
             <div id="guide-container" class="w-full overflow-auto p-2 bg-gray-950 rounded-lg flex justify-center items-center">
                 <canvas id="guide-canvas" class="rounded-lg"></canvas>
             </div>
@@ -530,17 +530,13 @@
                 controlsPanel.classList.add('hidden');
                 guidePanel.style.display = 'flex';
 
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = video.videoWidth;
-                tempCanvas.height = video.videoHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                if (!video.videoWidth || !video.videoHeight) return;
 
                 const overlapPercent = parseInt(overlapSlider.value) / 100;
                 const panelCount = parseInt(panelCountSlider.value);
                 
-                const pixelsPerDegreeH = tempCanvas.width / state.lastOnScreenHorizontalFov;
-                const pixelsPerDegreeV = tempCanvas.height / state.lastOnScreenVerticalFov;
+                const pixelsPerDegreeH = video.videoWidth / state.lastOnScreenHorizontalFov;
+                const pixelsPerDegreeV = video.videoHeight / state.lastOnScreenVerticalFov;
                 
                 const plannedPanelWidthDeg = state.orientation === 'landscape' ? state.lastSingleFov : state.lastSingleFovVertical;
                 const plannedPanelHeightDeg = state.orientation === 'landscape' ? state.lastSingleFovVertical : state.lastSingleFov;
@@ -551,7 +547,7 @@
 
                 if (state.orientation === 'landscape') {
                     const panelAdvance = panelWidthPx * (1 - overlapPercent);
-                    const totalGuideWidth = panelWidthPx + (panelAdvance * (panelCount - 1));
+                    const totalGuideWidth = panelWidthPx * panelCount - (panelAdvance * (panelCount - 1));
                     
                     guideCanvas.width = totalGuideWidth;
                     guideCanvas.height = panelHeightPx;
@@ -559,10 +555,7 @@
                     guideContainer.style.overflowY = 'hidden';
                     guideText.textContent = "Pan right to capture the remaining panels, using the dashed lines as guides.";
                     
-                    // Crop the first panel from the center of the captured video frame
-                    const cropX = (tempCanvas.width - panelWidthPx) / 2;
-                    const cropY = (tempCanvas.height - panelHeightPx) / 2;
-                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidthPx, panelHeightPx, 0, 0, panelWidthPx, panelHeightPx);
+                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
                     
                     // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
@@ -582,7 +575,7 @@
                     }
                 } else { // Portrait
                     const panelAdvance = panelHeightPx * (1 - overlapPercent);
-                    const totalGuideHeight = panelHeightPx + (panelAdvance * (panelCount - 1));
+                    const totalGuideHeight = panelHeightPx * panelCount - (panelAdvance * (panelCount-1));
 
                     guideCanvas.width = panelWidthPx;
                     guideCanvas.height = totalGuideHeight;
@@ -590,10 +583,7 @@
                     guideContainer.style.overflowX = 'hidden';
                     guideText.textContent = "Pan up to capture the remaining panels, using the dashed lines as guides.";
 
-                    // Crop the first panel from the center of the captured video frame
-                    const cropX = (tempCanvas.width - panelWidthPx) / 2;
-                    const cropY = (tempCanvas.height - panelHeightPx) / 2;
-                    guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidthPx, panelHeightPx, 0, 0, panelWidthPx, panelHeightPx);
+                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
 
                     // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
