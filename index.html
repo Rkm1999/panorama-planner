@@ -563,10 +563,6 @@
                     const cropX = (tempCanvas.width - panelWidthPx) / 2;
                     const cropY = (tempCanvas.height - panelHeightPx) / 2;
                     guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidthPx, panelHeightPx, 0, 0, panelWidthPx, panelHeightPx);
-
-                    // Draw overlay for remaining panels
-                    guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    guideCtx.fillRect(panelWidthPx, 0, totalGuideWidth - panelWidthPx, panelHeightPx);
                     
                     // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
@@ -598,10 +594,6 @@
                     const cropX = (tempCanvas.width - panelWidthPx) / 2;
                     const cropY = (tempCanvas.height - panelHeightPx) / 2;
                     guideCtx.drawImage(tempCanvas, cropX, cropY, panelWidthPx, panelHeightPx, 0, 0, panelWidthPx, panelHeightPx);
-
-                    // Draw overlay for remaining panels
-                    guideCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    guideCtx.fillRect(0, panelHeightPx, panelWidthPx, totalGuideHeight - panelHeightPx);
 
                     // Draw overall frame
                     guideCtx.strokeStyle = '#3b82f6';
