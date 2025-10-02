@@ -286,7 +286,34 @@
                     });
                     
                     if (videoDevices.length > 0) {
-                        await startCamera(videoDevices[0].deviceId);
+                        let preferredDeviceId = null;
+                        let backCameraId = null;
+                        let ultraWideId = null;
+                        let defaultDeviceId = videoDevices[0].deviceId;
+
+                        // Search for the best camera based on keywords in the label
+                        for (const device of videoDevices) {
+                            const label = device.label.toLowerCase();
+                            if (label.includes('back') && (label.includes('ultra wide') || label.includes('ultrawide'))) {
+                                preferredDeviceId = device.deviceId; // Found the best one (back, ultra wide)
+                                break;
+                            }
+                            if (label.includes('back')) {
+                                backCameraId = device.deviceId; // Found a back camera, keep searching for ultra wide
+                            }
+                            if (label.includes('ultra wide') || label.includes('ultrawide')) {
+                                ultraWideId = device.deviceId; // Found an ultra wide, might be front-facing
+                            }
+                        }
+
+                        // Determine which device to use based on priority: 1. Back+UW, 2. Back, 3. UW, 4. Default
+                        const deviceIdToUse = preferredDeviceId || backCameraId || ultraWideId || defaultDeviceId;
+                        
+                        // Set the dropdown to the selected camera
+                        cameraSelect.value = deviceIdToUse;
+
+                        // Start the camera
+                        await startCamera(deviceIdToUse);
                     }
                 } catch (err) {
                      console.error("Error enumerating devices:", err);
