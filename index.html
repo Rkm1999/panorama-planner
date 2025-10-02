@@ -498,14 +498,11 @@
                 if (!state.isCaptureMode) {
                     // --- PLANNING MODE OVERLAY ---
                     video.style.display = 'block';
-                    let panoWidth, panoHeight;
-                    if (state.orientation === 'landscape') {
-                        panoWidth = panoTotalLongFov * pixelsPerDegreeH;
-                        panoHeight = panoShortFov * pixelsPerDegreeV;
-                    } else { // Portrait
-                        panoWidth = panoShortFov * pixelsPerDegreeH;
-                        panoHeight = panoTotalLongFov * pixelsPerDegreeV;
-                    }
+                    
+                    // User expects to hold phone in landscape, so the overlay box represents a vertical slice.
+                    const panoWidth = panoShortFov * pixelsPerDegreeH;
+                    const panoHeight = panoTotalLongFov * pixelsPerDegreeV;
+
                     const startX = (overlayCanvas.width - panoWidth) / 2;
                     const startY = (overlayCanvas.height - panoHeight) / 2;
                     
@@ -522,37 +519,23 @@
                     const snapshotPixelsPerDegreeH = state.guideSnapshot.width / state.lastOnScreenHorizontalFov;
                     const snapshotPixelsPerDegreeV = state.guideSnapshot.height / state.lastOnScreenVerticalFov;
 
-                    const singlePanelLongFov = state.lastSingleFov;
-                    const singlePanelShortFov = state.lastSingleFovVertical;
+                    // The individual panel is always treated as a vertical shot.
+                    // Its height corresponds to the long edge FOV, and its width to the short edge FOV.
+                    const panelHeightPx = state.lastSingleFov * snapshotPixelsPerDegreeV;
+                    const panelWidthPx = state.lastSingleFovVertical * snapshotPixelsPerDegreeH;
 
-                    let panelWidthPx, panelHeightPx, panelAdvancePx, totalPanoDimPx;
+                    // The panning direction is ALWAYS vertical (top-to-bottom) because the overlay is vertical.
+                    const panelAdvancePx = panelHeightPx * (1 - overlap);
+                    const totalPanoDimPx = panelHeightPx + (panelAdvancePx * (parseInt(panelCountSlider.value) - 1));
 
-                    if (state.orientation === 'landscape') {
-                        panelWidthPx = singlePanelLongFov * snapshotPixelsPerDegreeH;
-                        panelHeightPx = singlePanelShortFov * snapshotPixelsPerDegreeV;
-                        panelAdvancePx = panelWidthPx * (1 - overlap);
-                        totalPanoDimPx = panelWidthPx + (panelAdvancePx * (parseInt(panelCountSlider.value) - 1));
-                    } else { // Portrait
-                        panelWidthPx = singlePanelShortFov * snapshotPixelsPerDegreeH;
-                        panelHeightPx = singlePanelLongFov * snapshotPixelsPerDegreeV;
-                        panelAdvancePx = panelHeightPx * (1 - overlap);
-                        totalPanoDimPx = panelHeightPx + (panelAdvancePx * (parseInt(panelCountSlider.value) - 1));
-                    }
+                    const sWidth = panelWidthPx;
+                    const sHeight = panelHeightPx;
 
-                    let sx, sy, sWidth, sHeight;
-                    sWidth = panelWidthPx;
-                    sHeight = panelHeightPx;
-
-                    if (state.orientation === 'landscape') {
-                        const panoStartX = (state.guideSnapshot.width - totalPanoDimPx) / 2;
-                        sx = panoStartX + (state.currentPanel - 1) * panelAdvancePx;
-                        sy = (state.guideSnapshot.height - panelHeightPx) / 2;
-                    } else { // Portrait
-                        const panoStartY = (state.guideSnapshot.height - totalPanoDimPx) / 2;
-                        sx = (state.guideSnapshot.width - panelWidthPx) / 2;
-                        sy = panoStartY + (state.currentPanel - 1) * panelAdvancePx;
-                    }
-
+                    // Advance vertically (sy changes) regardless of orientation setting.
+                    const panoStartY = (state.guideSnapshot.height - totalPanoDimPx) / 2;
+                    const sx = (state.guideSnapshot.width - sWidth) / 2;
+                    const sy = panoStartY + (state.currentPanel - 1) * panelAdvancePx;
+                    
                     // Calculate destination rect to draw the cropped image, fitting it to the canvas
                     const canvasAspectRatio = overlayCanvas.width / overlayCanvas.height;
                     const panelAspectRatio = sWidth / sHeight;
@@ -682,6 +665,4 @@
     </script>
 </body>
 </html>
-
-
 
