@@ -200,13 +200,14 @@
         <!-- Guide Panel (Now Capture UI) -->
         <div id="guide-panel" class="absolute inset-x-0 bottom-0 bg-gray-900 bg-opacity-70 p-4 z-20 flex-col items-center hidden">
             <div class="flex items-center justify-between w-full max-w-lg mx-auto">
-                <button id="reset-button" class="text-white font-bold py-2 px-4 rounded-lg bg-gray-600 hover:bg-gray-700 transition-colors">Exit Guide</button>
+                <button id="previous-panel-button" class="text-white font-bold py-2 px-4 rounded-lg bg-gray-600 hover:bg-gray-700 transition-colors">Prev</button>
                 <div class="text-center text-white">
                     <p class="font-bold text-lg">Panel <span id="current-panel-indicator">1</span> of <span id="total-panel-indicator">5</span></p>
                     <p id="guide-text" class="text-sm text-gray-300">Align shot in the solid box.</p>
                 </div>
                 <button id="next-panel-button" class="text-white font-bold py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors">Next Panel</button>
             </div>
+             <button id="reset-button" class="mt-3 text-xs text-gray-400 hover:text-white font-semibold transition-colors">Exit Guide</button>
         </div>
 
     </main>
@@ -244,6 +245,7 @@
             const guidePanel = document.getElementById('guide-panel');
             const guideText = document.getElementById('guide-text');
             const resetButton = document.getElementById('reset-button');
+            const previousPanelButton = document.getElementById('previous-panel-button'); // New button
             const nextPanelButton = document.getElementById('next-panel-button');
             const currentPanelIndicator = document.getElementById('current-panel-indicator');
             const totalPanelIndicator = document.getElementById('total-panel-indicator');
@@ -588,11 +590,13 @@
     
                     controlsPanel.classList.add('hidden');
                     guidePanel.style.display = 'flex';
+                    fullscreenCaptureBtn.style.display = 'none'; // Hide fullscreen button when guide is active
     
                     currentPanelIndicator.textContent = state.currentPanel;
                     totalPanelIndicator.textContent = panelCount;
                     nextPanelButton.textContent = 'Next Panel';
                     guideText.textContent = 'Use this frame to compose your first shot.';
+                    previousPanelButton.classList.add('opacity-50', 'cursor-not-allowed');
                 };
                 snapshotImage.src = tempCanvas.toDataURL('image/jpeg', 0.9);
             }
@@ -622,6 +626,12 @@
 
             fullscreenBtn.addEventListener('click', () => {
                 bodyContainer.classList.toggle('fullscreen-active');
+                
+                // If we are turning fullscreen OFF, make sure the capture button is also hidden
+                if (!bodyContainer.classList.contains('fullscreen-active')) {
+                    fullscreenCaptureBtn.style.display = 'none';
+                }
+
                 setTimeout(resizeCanvas, 300);
             });
 
@@ -633,6 +643,21 @@
                 state.guideSnapshot = null;
                 guidePanel.style.display = 'none';
                 controlsPanel.classList.remove('hidden');
+                // Remove any inline style override so the CSS classes can control visibility again.
+                fullscreenCaptureBtn.style.display = '';
+            });
+
+            previousPanelButton.addEventListener('click', () => {
+                if (state.currentPanel > 1) {
+                    state.currentPanel--;
+                    currentPanelIndicator.textContent = state.currentPanel;
+                    guideText.textContent = state.currentPanel === 1 ? 'Compose your first shot.' : 'Compose your previous shot.';
+                    nextPanelButton.textContent = 'Next Panel'; // Change from 'Finish' if necessary
+                }
+
+                if (state.currentPanel === 1) {
+                     previousPanelButton.classList.add('opacity-50', 'cursor-not-allowed');
+                }
             });
 
             nextPanelButton.addEventListener('click', () => {
@@ -641,6 +666,7 @@
                     state.currentPanel++;
                     currentPanelIndicator.textContent = state.currentPanel;
                     guideText.textContent = 'Compose your next shot.';
+                    previousPanelButton.classList.remove('opacity-50', 'cursor-not-allowed'); // Enable prev button
                     if (state.currentPanel === panelCount) {
                         nextPanelButton.textContent = 'Finish';
                         guideText.textContent = 'Compose your final shot.';
@@ -656,4 +682,6 @@
     </script>
 </body>
 </html>
+
+
 
