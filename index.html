@@ -105,20 +105,15 @@
                 <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Phone Preview Settings</h3>
                 <!-- Phone Lens Selector -->
                 <div class="grid control-panel-grid items-center gap-2">
-                    <label for="camera-select" class="text-sm font-medium">Phone Lens</label>
+                    <label for="camera-select" class="text-sm font-medium">Phone Camera</label>
                     <select id="camera-select" class="bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm w-full"></select>
-                </div>
-                 <div class="grid control-panel-grid items-center gap-2">
-                    <span class="text-sm font-medium text-gray-300">Detected FL</span>
-                    <span id="detected-fl-info" class="text-sm text-gray-400 font-mono">N/A</span>
                 </div>
                 <!-- Phone Focal Length (Manual Override) -->
                 <div class="grid control-panel-grid items-center gap-2">
-                    <label for="phone-fl-select" class="text-sm font-medium">Phone FL (Manual)</label>
+                    <label for="phone-fl-select" class="text-sm font-medium">Phone Lens</label>
                     <select id="phone-fl-select" class="bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm w-full">
-                        <option value="auto" selected>Auto-Detect</option>
                         <option value="13">Ultrawide (~13mm)</option>
-                        <option value="24">Wide (~24mm)</option>
+                        <option value="24" selected>Wide (~24mm)</option>
                         <option value="50">Standard (~50mm)</option>
                         <option value="77">Telephoto (~77mm)</option>
                     </select>
@@ -225,7 +220,6 @@
 
             const controlsPanel = document.getElementById('controls-panel');
             const cameraSelect = document.getElementById('camera-select');
-            const detectedFLInfo = document.getElementById('detected-fl-info');
             const phoneFLSelect = document.getElementById('phone-fl-select');
             const sensorSelect = document.getElementById('sensor-size');
             const focalLengthSlider = document.getElementById('focal-length');
@@ -312,6 +306,20 @@
                         // Set the dropdown to the selected camera
                         cameraSelect.value = deviceIdToUse;
 
+                        // Also set the phone lens dropdown based on the selected camera's name
+                        const selectedDevice = videoDevices.find(d => d.deviceId === deviceIdToUse);
+                        if (selectedDevice) {
+                            const label = selectedDevice.label.toLowerCase();
+                            if (label.includes('ultra wide') || label.includes('ultrawide')) {
+                                phoneFLSelect.value = '13';
+                            } else if (label.includes('telephoto')) {
+                                phoneFLSelect.value = '77';
+                            } else {
+                                // Default to the wide lens for standard back cameras
+                                phoneFLSelect.value = '24';
+                            }
+                        }
+
                         // Start the camera
                         await startCamera(deviceIdToUse);
                     }
@@ -345,7 +353,6 @@
                         permissionMessage.style.display = 'none';
                         video.play();
                         resizeCanvas();
-                        updateDetectedFocalLengthInfo();
                         requestAnimationFrame(updateCalculationsAndDraw);
                     };
                 } catch (err) {
@@ -387,35 +394,6 @@
             function calculateSingleFOV(sensorDimension, focalLength) {
                 if (focalLength === 0) return 180;
                 return 2 * Math.atan(sensorDimension / (2 * focalLength)) * (180 / Math.PI);
-            }
-            
-            function updateDetectedFocalLengthInfo() {
-                if (!state.stream) {
-                    detectedFLInfo.textContent = 'N/A';
-                    return;
-                }
-                const track = state.stream.getVideoTracks()[0];
-                if (typeof track.getSettings !== 'function') {
-                    detectedFLInfo.textContent = 'Unsupported';
-                    return;
-                }
-                
-                const settings = track.getSettings();
-                if (settings.focalLength) {
-                    const nativeFocalLength = settings.focalLength;
-                    const phoneSensor = SENSOR_SIZES.phone;
-                    const fullFrameSensor = SENSOR_SIZES.fullframe;
-
-                    const phoneSensorDiagonal = Math.sqrt(phoneSensor.width**2 + phoneSensor.height**2);
-                    const fullFrameDiagonal = Math.sqrt(fullFrameSensor.width**2 + fullFrameSensor.height**2);
-                    
-                    const cropFactor = fullFrameDiagonal / phoneSensorDiagonal;
-                    const equivalentFocalLength = Math.round(nativeFocalLength * cropFactor);
-                    
-                    detectedFLInfo.textContent = `~${equivalentFocalLength}mm (35mm equiv.)`;
-                } else {
-                    detectedFLInfo.textContent = 'Not Found';
-                }
             }
 
             function updateCalculationsAndDraw() {
@@ -463,45 +441,26 @@
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
                 panoFovVerticalValue.textContent = `${shortEdgeFov.toFixed(1)}°`;
                 
-                const videoTrack = state.stream ? state.stream.getVideoTracks()[0] : null;
-                const videoSettings = videoTrack ? videoTrack.getSettings() : {};
-                const manualPhoneFL = phoneFLSelect.value;
+                const phoneFL = phoneFLSelect.value;
                 
-                let onScreenVerticalFov = 45;
-                let onScreenHorizontalFov = 75;
+                let onScreenVerticalFov, onScreenHorizontalFov;
 
                 const videoIsPortrait = overlayCanvas.height > overlayCanvas.width && overlayCanvas.width > 0;
 
-                if (manualPhoneFL !== 'auto') {
-                    const fl = parseInt(manualPhoneFL);
-                    const fullFrameSensor = SENSOR_SIZES.fullframe;
-                    const sensorWidthFor16x9 = fullFrameSensor.width;
-                    const sensorHeightFor16x9 = fullFrameSensor.width * (9/16);
-                    const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
-                    const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
+                // The calculation is now always based on the manual selection.
+                const fl = parseInt(phoneFL);
+                const fullFrameSensor = SENSOR_SIZES.fullframe;
+                const sensorWidthFor16x9 = fullFrameSensor.width;
+                const sensorHeightFor16x9 = fullFrameSensor.width * (9/16);
+                const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
+                const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
 
-                    if (videoIsPortrait) {
-                        onScreenHorizontalFov = landscapeVFOV;
-                        onScreenVerticalFov = landscapeHFOV;
-                    } else {
-                        onScreenHorizontalFov = landscapeHFOV;
-                        onScreenVerticalFov = landscapeVFOV;
-                    }
-                } else if (videoSettings.focalLength) {
-                    const fl = videoSettings.focalLength;
-                    const phoneSensor = SENSOR_SIZES.phone;
-                    const sensorWidthFor16x9 = phoneSensor.width;
-                    const sensorHeightFor16x9 = phoneSensor.width * (9/16);
-                    const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
-                    const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
-
-                    if (videoIsPortrait) {
-                        onScreenHorizontalFov = landscapeVFOV;
-                        onScreenVerticalFov = landscapeHFOV;
-                    } else {
-                        onScreenHorizontalFov = landscapeHFOV;
-                        onScreenVerticalFov = landscapeVFOV;
-                    }
+                if (videoIsPortrait) {
+                    onScreenHorizontalFov = landscapeVFOV;
+                    onScreenVerticalFov = landscapeHFOV;
+                } else {
+                    onScreenHorizontalFov = landscapeHFOV;
+                    onScreenVerticalFov = landscapeVFOV;
                 }
                 
                 state.lastOnScreenVerticalFov = onScreenVerticalFov;
@@ -692,4 +651,5 @@
     </script>
 </body>
 </html>
+
 
