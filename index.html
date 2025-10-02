@@ -197,17 +197,16 @@
             </button>
         </div>
 
-        <!-- Guide Panel -->
-        <div id="guide-panel" class="absolute inset-0 bg-gray-900 p-4 z-20 flex-col items-center justify-center text-center hidden">
-            <h2 class="text-lg font-bold mb-2">Panorama Composition Guide</h2>
-            <p class="text-sm text-gray-400 mb-4">This preview shows the full area your panorama will cover.</p>
-            <div id="guide-container" class="w-full overflow-auto p-2 bg-gray-950 rounded-lg flex justify-center items-center">
-                <canvas id="guide-canvas" class="rounded-lg"></canvas>
+        <!-- Guide Panel (Now Capture UI) -->
+        <div id="guide-panel" class="absolute inset-x-0 bottom-0 bg-gray-900 bg-opacity-70 p-4 z-20 flex-col items-center hidden">
+            <div class="flex items-center justify-between w-full max-w-lg mx-auto">
+                <button id="reset-button" class="text-white font-bold py-2 px-4 rounded-lg bg-gray-600 hover:bg-gray-700 transition-colors">Exit Guide</button>
+                <div class="text-center text-white">
+                    <p class="font-bold text-lg">Panel <span id="current-panel-indicator">1</span> of <span id="total-panel-indicator">5</span></p>
+                    <p id="guide-text" class="text-sm text-gray-300">Align shot in the solid box.</p>
+                </div>
+                <button id="next-panel-button" class="text-white font-bold py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors">Next Panel</button>
             </div>
-            <p id="guide-text" class="text-sm mt-4 text-gray-400">Pan right to capture the remaining panels, using the dashed lines as guides.</p>
-            <button id="reset-button" class="mt-4 w-full max-w-xs bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
-                Plan New Panorama
-            </button>
         </div>
 
     </main>
@@ -243,11 +242,11 @@
             
             const captureButton = document.getElementById('capture-button');
             const guidePanel = document.getElementById('guide-panel');
-            const guideCanvas = document.getElementById('guide-canvas');
-            const guideCtx = guideCanvas.getContext('2d');
-            const guideContainer = document.getElementById('guide-container');
             const guideText = document.getElementById('guide-text');
             const resetButton = document.getElementById('reset-button');
+            const nextPanelButton = document.getElementById('next-panel-button');
+            const currentPanelIndicator = document.getElementById('current-panel-indicator');
+            const totalPanelIndicator = document.getElementById('total-panel-indicator');
             
             // --- State and Constants ---
             const SENSOR_SIZES = {
@@ -264,12 +263,14 @@
                 lastOnScreenHorizontalFov: 75, // Fallback
                 lastSingleFov: 0,
                 lastSingleFovVertical: 0,
+                isCaptureMode: false,
+                currentPanel: 1,
+                guideSnapshot: null,
             };
 
             // --- Camera Initialization ---
             async function populateCameraList() {
                 try {
-                    // We need a dummy stream to request permission and get device labels.
                     await navigator.mediaDevices.getUserMedia({ video: true });
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     const videoDevices = devices.filter(device => device.kind === 'videoinput');
@@ -389,6 +390,13 @@
             }
 
             function updateCalculationsAndDraw() {
+                if (state.isCaptureMode) {
+                    // In capture mode, we only need to redraw the static guide frame
+                    drawOverlay();
+                    requestAnimationFrame(updateCalculationsAndDraw);
+                    return;
+                }
+
                 const sensor = SENSOR_SIZES[sensorSelect.value];
                 const focalLength = parseInt(focalLengthSlider.value);
                 const overlap = parseInt(overlapSlider.value) / 100;
@@ -420,7 +428,9 @@
                 state.lastSingleFov = longEdgeFov;
                 state.lastSingleFovVertical = shortEdgeFov;
 
-                let panoFov = (longEdgeFov * panelCount) - (longEdgeFov * overlap * (panelCount - 1));
+                const singlePanelAdvanceFov = longEdgeFov * (1 - overlap);
+                let panoFov = longEdgeFov + ((panelCount - 1) * singlePanelAdvanceFov);
+
                 panoFovValue.textContent = `${panoFov.toFixed(1)}°`;
                 panoFovVerticalValue.textContent = `${shortEdgeFov.toFixed(1)}°`;
                 
@@ -428,20 +438,16 @@
                 const videoSettings = videoTrack ? videoTrack.getSettings() : {};
                 const manualPhoneFL = phoneFLSelect.value;
                 
-                let onScreenVerticalFov = 45; // Fallback
-                let onScreenHorizontalFov = 75; // Fallback
+                let onScreenVerticalFov = 45;
+                let onScreenHorizontalFov = 75;
 
                 const videoIsPortrait = overlayCanvas.height > overlayCanvas.width && overlayCanvas.width > 0;
 
                 if (manualPhoneFL !== 'auto') {
                     const fl = parseInt(manualPhoneFL);
                     const fullFrameSensor = SENSOR_SIZES.fullframe;
-
-                    // We assume the equivalent focal length is for a 16:9 video aspect ratio,
-                    // as this is standard for video. A 16:9 crop of a 36mm wide FF sensor is 36mm x 20.25mm.
-                    const sensorWidthFor16x9 = fullFrameSensor.width; // 36mm
-                    const sensorHeightFor16x9 = fullFrameSensor.width * (9/16); // 20.25mm
-
+                    const sensorWidthFor16x9 = fullFrameSensor.width;
+                    const sensorHeightFor16x9 = fullFrameSensor.width * (9/16);
                     const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
                     const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
 
@@ -452,14 +458,11 @@
                         onScreenHorizontalFov = landscapeHFOV;
                         onScreenVerticalFov = landscapeVFOV;
                     }
-
                 } else if (videoSettings.focalLength) {
                     const fl = videoSettings.focalLength;
-                    const phoneSensor = SENSOR_SIZES.phone; // This is a 4:3 sensor
-                    // Video is a 16:9 crop from the center of the 4:3 sensor.
-                    const sensorWidthFor16x9 = phoneSensor.width; // 6.66mm
-                    const sensorHeightFor16x9 = phoneSensor.width * (9/16); // 3.746mm
-
+                    const phoneSensor = SENSOR_SIZES.phone;
+                    const sensorWidthFor16x9 = phoneSensor.width;
+                    const sensorHeightFor16x9 = phoneSensor.width * (9/16);
                     const landscapeHFOV = calculateSingleFOV(sensorWidthFor16x9, fl);
                     const landscapeVFOV = calculateSingleFOV(sensorHeightFor16x9, fl);
 
@@ -475,7 +478,7 @@
                 state.lastOnScreenVerticalFov = onScreenVerticalFov;
                 state.lastOnScreenHorizontalFov = onScreenHorizontalFov;
 
-                drawOverlay(onScreenHorizontalFov, onScreenVerticalFov, panoFov, shortEdgeFov, panelCount, overlap);
+                drawOverlay(panoFov, shortEdgeFov);
                 
                 if (state.stream) {
                     requestAnimationFrame(updateCalculationsAndDraw);
@@ -483,126 +486,115 @@
             }
             
             // --- Drawing Logic ---
-            function drawOverlay(phoneHorizontalFov, phoneVerticalFov, panoTotalLongFov, panoShortFov, panelCount, overlap) {
+            function drawOverlay(panoTotalLongFov, panoShortFov) {
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-                
-                const pixelsPerDegreeH = overlayCanvas.width / phoneHorizontalFov;
-                const pixelsPerDegreeV = overlayCanvas.height / phoneVerticalFov;
-                
-                const panoWidth = panoShortFov * pixelsPerDegreeH;
-                const panoHeight = panoTotalLongFov * pixelsPerDegreeV;
-                
-                const startX = (overlayCanvas.width - panoWidth) / 2;
-                const startY = (overlayCanvas.height - panoHeight) / 2;
-                
-                overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.2)';
-                overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-                overlayCtx.lineWidth = 6;
-                overlayCtx.fillRect(startX, startY, panoWidth, panoHeight);
-                overlayCtx.strokeRect(startX, startY, panoWidth, panoHeight);
+                if (state.lastOnScreenHorizontalFov <= 0 || state.lastOnScreenVerticalFov <= 0) return;
 
-                // Draw divider lines inside the main overlay
-                overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-                overlayCtx.lineWidth = 2;
-                overlayCtx.setLineDash([15, 15]);
+                const pixelsPerDegreeH = overlayCanvas.width / state.lastOnScreenHorizontalFov;
+                const pixelsPerDegreeV = overlayCanvas.height / state.lastOnScreenVerticalFov;
 
-                const singlePanelLongFov = state.lastSingleFov;
-                const panelAdvancePixels = (singlePanelLongFov * (1 - overlap)) * pixelsPerDegreeV;
-                
-                // The overlay is always drawn as a vertical box, so we draw horizontal lines to divide the height into panels.
-                for (let i = 1; i < panelCount; i++) {
-                    const lineY = startY + (i * panelAdvancePixels);
-                     if (lineY > startY && lineY < startY + panoHeight) {
-                         overlayCtx.beginPath();
-                         overlayCtx.moveTo(startX, lineY);
-                         overlayCtx.lineTo(startX + panoWidth, lineY);
-                         overlayCtx.stroke();
-                     }
+                if (!state.isCaptureMode) {
+                    // --- PLANNING MODE OVERLAY ---
+                    video.style.display = 'block';
+                    let panoWidth, panoHeight;
+                    if (state.orientation === 'landscape') {
+                        panoWidth = panoTotalLongFov * pixelsPerDegreeH;
+                        panoHeight = panoShortFov * pixelsPerDegreeV;
+                    } else { // Portrait
+                        panoWidth = panoShortFov * pixelsPerDegreeH;
+                        panoHeight = panoTotalLongFov * pixelsPerDegreeV;
+                    }
+                    const startX = (overlayCanvas.width - panoWidth) / 2;
+                    const startY = (overlayCanvas.height - panoHeight) / 2;
+                    
+                    overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+                    overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+                    overlayCtx.lineWidth = 6;
+                    overlayCtx.fillRect(startX, startY, panoWidth, panoHeight);
+                    overlayCtx.strokeRect(startX, startY, panoWidth, panoHeight);
+                } else if (state.guideSnapshot) {
+                    // --- CAPTURE MODE OVERLAY (showing static cropped panel) ---
+                    video.style.display = 'none'; // Hide live video
+                    const overlap = parseInt(overlapSlider.value) / 100;
+                    
+                    const snapshotPixelsPerDegreeH = state.guideSnapshot.width / state.lastOnScreenHorizontalFov;
+                    const snapshotPixelsPerDegreeV = state.guideSnapshot.height / state.lastOnScreenVerticalFov;
+
+                    const singlePanelLongFov = state.lastSingleFov;
+                    const singlePanelShortFov = state.lastSingleFovVertical;
+
+                    let panelWidthPx, panelHeightPx, panelAdvancePx, totalPanoDimPx;
+
+                    if (state.orientation === 'landscape') {
+                        panelWidthPx = singlePanelLongFov * snapshotPixelsPerDegreeH;
+                        panelHeightPx = singlePanelShortFov * snapshotPixelsPerDegreeV;
+                        panelAdvancePx = panelWidthPx * (1 - overlap);
+                        totalPanoDimPx = panelWidthPx + (panelAdvancePx * (parseInt(panelCountSlider.value) - 1));
+                    } else { // Portrait
+                        panelWidthPx = singlePanelShortFov * snapshotPixelsPerDegreeH;
+                        panelHeightPx = singlePanelLongFov * snapshotPixelsPerDegreeV;
+                        panelAdvancePx = panelHeightPx * (1 - overlap);
+                        totalPanoDimPx = panelHeightPx + (panelAdvancePx * (parseInt(panelCountSlider.value) - 1));
+                    }
+
+                    let sx, sy, sWidth, sHeight;
+                    sWidth = panelWidthPx;
+                    sHeight = panelHeightPx;
+
+                    if (state.orientation === 'landscape') {
+                        const panoStartX = (state.guideSnapshot.width - totalPanoDimPx) / 2;
+                        sx = panoStartX + (state.currentPanel - 1) * panelAdvancePx;
+                        sy = (state.guideSnapshot.height - panelHeightPx) / 2;
+                    } else { // Portrait
+                        const panoStartY = (state.guideSnapshot.height - totalPanoDimPx) / 2;
+                        sx = (state.guideSnapshot.width - panelWidthPx) / 2;
+                        sy = panoStartY + (state.currentPanel - 1) * panelAdvancePx;
+                    }
+
+                    // Calculate destination rect to draw the cropped image, fitting it to the canvas
+                    const canvasAspectRatio = overlayCanvas.width / overlayCanvas.height;
+                    const panelAspectRatio = sWidth / sHeight;
+                    let dx, dy, dWidth, dHeight;
+
+                    if (panelAspectRatio > canvasAspectRatio) {
+                        dWidth = overlayCanvas.width;
+                        dHeight = dWidth / panelAspectRatio;
+                    } else {
+                        dHeight = overlayCanvas.height;
+                        dWidth = dHeight * panelAspectRatio;
+                    }
+                    dx = (overlayCanvas.width - dWidth) / 2;
+                    dy = (overlayCanvas.height - dHeight) / 2;
+
+                    overlayCtx.drawImage(state.guideSnapshot, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
                 }
-                overlayCtx.setLineDash([]);
             }
 
             // --- Capture Logic ---
             function captureGuide() {
-                if (bodyContainer.classList.contains('fullscreen-active')) {
-                    bodyContainer.classList.remove('fullscreen-active');
-                }
-                controlsPanel.classList.add('hidden');
-                guidePanel.style.display = 'flex';
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = video.videoWidth;
+                tempCanvas.height = video.videoHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(video, 0, 0);
 
-                if (!video.videoWidth || !video.videoHeight) return;
-
-                const overlapPercent = parseInt(overlapSlider.value) / 100;
-                const panelCount = parseInt(panelCountSlider.value);
-                
-                const pixelsPerDegreeH = video.videoWidth / state.lastOnScreenHorizontalFov;
-                const pixelsPerDegreeV = video.videoHeight / state.lastOnScreenVerticalFov;
-                
-                const plannedPanelWidthDeg = state.orientation === 'landscape' ? state.lastSingleFov : state.lastSingleFovVertical;
-                const plannedPanelHeightDeg = state.orientation === 'landscape' ? state.lastSingleFovVertical : state.lastSingleFov;
-
-                const panelWidthPx = plannedPanelWidthDeg * pixelsPerDegreeH;
-                const panelHeightPx = plannedPanelHeightDeg * pixelsPerDegreeV;
-
-
-                if (state.orientation === 'landscape') {
-                    const panelAdvance = panelWidthPx * (1 - overlapPercent);
-                    const totalGuideWidth = panelWidthPx * panelCount - (panelAdvance * (panelCount - 1));
-                    
-                    guideCanvas.width = totalGuideWidth;
-                    guideCanvas.height = panelHeightPx;
-                    guideContainer.style.overflowX = 'auto';
-                    guideContainer.style.overflowY = 'hidden';
-                    guideText.textContent = "Pan right to capture the remaining panels, using the dashed lines as guides.";
-                    
-                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
-                    
-                    // Draw overall frame
-                    guideCtx.strokeStyle = '#3b82f6';
-                    guideCtx.lineWidth = 8;
-                    guideCtx.strokeRect(0, 0, totalGuideWidth, panelHeightPx);
-                    
-                    // Draw divider lines
-                    guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                    guideCtx.lineWidth = 3;
-                    guideCtx.setLineDash([20, 15]);
-                    for (let i = 1; i < panelCount; i++) {
-                        const lineX = i * panelAdvance;
-                        guideCtx.beginPath();
-                        guideCtx.moveTo(lineX, 0);
-                        guideCtx.lineTo(lineX, panelHeightPx);
-                        guideCtx.stroke();
-                    }
-                } else { // Portrait
-                    const panelAdvance = panelHeightPx * (1 - overlapPercent);
-                    const totalGuideHeight = panelHeightPx * panelCount - (panelAdvance * (panelCount-1));
-
-                    guideCanvas.width = panelWidthPx;
-                    guideCanvas.height = totalGuideHeight;
-                    guideContainer.style.overflowY = 'auto';
-                    guideContainer.style.overflowX = 'hidden';
-                    guideText.textContent = "Pan up to capture the remaining panels, using the dashed lines as guides.";
-
-                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
-
-                    // Draw overall frame
-                    guideCtx.strokeStyle = '#3b82f6';
-                    guideCtx.lineWidth = 8;
-                    guideCtx.strokeRect(0, 0, panelWidthPx, totalGuideHeight);
-                    
-                    // Draw divider lines
-                    guideCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                    guideCtx.lineWidth = 3;
-                    guideCtx.setLineDash([20, 15]);
-                    for (let i = 1; i < panelCount; i++) {
-                        const lineY = i * panelAdvance;
-                        guideCtx.beginPath();
-                        guideCtx.moveTo(0, lineY);
-                        guideCtx.lineTo(panelWidthPx, lineY);
-                        guideCtx.stroke();
-                    }
-                }
-                guideCtx.setLineDash([]);
+                const snapshotImage = new Image();
+                snapshotImage.onload = () => {
+                    state.guideSnapshot = snapshotImage;
+                    const panelCount = parseInt(panelCountSlider.value);
+    
+                    state.isCaptureMode = true;
+                    state.currentPanel = 1;
+    
+                    controlsPanel.classList.add('hidden');
+                    guidePanel.style.display = 'flex';
+    
+                    currentPanelIndicator.textContent = state.currentPanel;
+                    totalPanelIndicator.textContent = panelCount;
+                    nextPanelButton.textContent = 'Next Panel';
+                    guideText.textContent = 'Use this frame to compose your first shot.';
+                };
+                snapshotImage.src = tempCanvas.toDataURL('image/jpeg', 0.9);
             }
 
             // --- Event Listeners ---
@@ -637,8 +629,25 @@
             fullscreenCaptureBtn.addEventListener('click', captureGuide);
             
             resetButton.addEventListener('click', () => {
+                state.isCaptureMode = false;
+                state.guideSnapshot = null;
                 guidePanel.style.display = 'none';
                 controlsPanel.classList.remove('hidden');
+            });
+
+            nextPanelButton.addEventListener('click', () => {
+                const panelCount = parseInt(panelCountSlider.value);
+                if (state.currentPanel < panelCount) {
+                    state.currentPanel++;
+                    currentPanelIndicator.textContent = state.currentPanel;
+                    guideText.textContent = 'Compose your next shot.';
+                    if (state.currentPanel === panelCount) {
+                        nextPanelButton.textContent = 'Finish';
+                        guideText.textContent = 'Compose your final shot.';
+                    }
+                } else {
+                    resetButton.click();
+                }
             });
             
             // --- Start the app ---
